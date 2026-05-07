@@ -2135,6 +2135,95 @@ static const struct snd_kcontrol_new wcd9378_snd_controls[] = {
 
 /* ------------------------------------------------------------------ */
 
+/* Patch 7 — DAPM routes                                               */
+/* ------------------------------------------------------------------ */
+static const struct snd_soc_dapm_route wcd9378_audio_map[] = {
+	/* ADC1 path */
+	{ "ADC1_OUTPUT", NULL, "ADC1_MIXER" },
+	{ "ADC1_MIXER", "Switch", "ADC1" },
+	{ "ADC1", NULL, "AMIC1" },
+
+	/* ADC2 path — mux selects AMIC2 or AMIC3 */
+	{ "ADC2_OUTPUT", NULL, "ADC2_MIXER" },
+	{ "ADC2_MIXER", "Switch", "ADC2" },
+	{ "ADC2", NULL, "ADC2 MUX" },
+	{ "ADC2 MUX", "INP3", "AMIC3" },
+	{ "ADC2 MUX", "INP2", "AMIC2" },
+
+	/* ADC3 path */
+	{ "ADC3_OUTPUT", NULL, "ADC3_MIXER" },
+	{ "ADC3_MIXER", "Switch", "ADC3" },
+	{ "ADC3", NULL, "AMIC3" },
+
+	/* DMIC paths — DMIC0-7 across 2 physical TX SoundWire lanes */
+	{ "DMIC0_OUTPUT", NULL, "DMIC0_MIXER" },
+	{ "DMIC0_MIXER", "Switch", "DMIC0" },
+
+	{ "DMIC1_OUTPUT", NULL, "DMIC1_MIXER" },
+	{ "DMIC1_MIXER", "Switch", "DMIC1" },
+
+	{ "DMIC2_OUTPUT", NULL, "DMIC2_MIXER" },
+	{ "DMIC2_MIXER", "Switch", "DMIC2" },
+
+	{ "DMIC3_OUTPUT", NULL, "DMIC3_MIXER" },
+	{ "DMIC3_MIXER", "Switch", "DMIC3" },
+
+	{ "DMIC4_OUTPUT", NULL, "DMIC4_MIXER" },
+	{ "DMIC4_MIXER", "Switch", "DMIC4" },
+
+	{ "DMIC5_OUTPUT", NULL, "DMIC5_MIXER" },
+	{ "DMIC5_MIXER", "Switch", "DMIC5" },
+
+	{ "DMIC6_OUTPUT", NULL, "DMIC6_MIXER" },
+	{ "DMIC6_MIXER", "Switch", "DMIC6" },
+
+	{ "DMIC7_OUTPUT", NULL, "DMIC7_MIXER" },
+	{ "DMIC7_MIXER", "Switch", "DMIC7" },
+
+	/* HPHL RX path */
+	{ "IN1_HPHL", NULL, "VDD_BUCK" },
+	{ "IN1_HPHL", NULL, "CLS_H_PORT" },
+	{ "RX1", NULL, "IN1_HPHL" },
+	{ "RDAC1", NULL, "RX1" },
+	{ "HPHL_RDAC", "Switch", "RDAC1" },
+	{ "HPHL PGA", NULL, "HPHL_RDAC" },
+	{ "HPHL", NULL, "HPHL PGA" },
+
+	/* HPHR RX path */
+	{ "IN2_HPHR", NULL, "VDD_BUCK" },
+	{ "IN2_HPHR", NULL, "CLS_H_PORT" },
+	{ "RX2", NULL, "IN2_HPHR" },
+	{ "RDAC2", NULL, "RX2" },
+	{ "HPHR_RDAC", "Switch", "RDAC2" },
+	{ "HPHR PGA", NULL, "HPHR_RDAC" },
+	{ "HPHR", NULL, "HPHR PGA" },
+
+	/* AUX RX path */
+	{ "IN3_AUX", NULL, "VDD_BUCK" },
+	{ "IN3_AUX", NULL, "CLS_H_PORT" },
+	{ "RX3", NULL, "IN3_AUX" },
+	{ "RDAC4", NULL, "RX3" },
+	{ "AUX_RDAC", "Switch", "RDAC4" },
+	{ "AUX PGA", NULL, "AUX_RDAC" },
+	{ "AUX", NULL, "AUX PGA" },
+
+	/* EAR RX path — RDAC3 MUX selects RX1 or RX3 */
+	{ "RDAC3_MUX", "RX3", "RX3" },
+	{ "RDAC3_MUX", "RX1", "RX1" },
+	{ "RDAC3", NULL, "RDAC3_MUX" },
+	{ "EAR_RDAC", "Switch", "RDAC3" },
+	{ "EAR PGA", NULL, "EAR_RDAC" },
+	{ "EAR", NULL, "EAR PGA" },
+
+	/* DSD playback — bypass interpolator, feed directly to HPH */
+	{ "DSD_L PGA", NULL, "IN_DSD_L" },
+	{ "DSD_R PGA", NULL, "IN_DSD_R" },
+	{ "HPHL", NULL, "DSD_L PGA" },
+	{ "HPHR", NULL, "DSD_R PGA" },
+};
+
+/* ------------------------------------------------------------------ */
+
 /* Component probe / remove / set_jack                                 */
 /* ------------------------------------------------------------------ */
 static int wcd9378_soc_codec_probe(struct snd_soc_component *component)
@@ -2261,6 +2350,8 @@ static const struct snd_soc_component_driver soc_codec_dev_wcd9378 = {
 	.num_controls	  = ARRAY_SIZE(wcd9378_snd_controls),
 	.dapm_widgets	  = wcd9378_dapm_widgets,
 	.num_dapm_widgets = ARRAY_SIZE(wcd9378_dapm_widgets),
+	.dapm_routes	  = wcd9378_audio_map,
+	.num_dapm_routes  = ARRAY_SIZE(wcd9378_audio_map),
 	.set_jack	  = wcd9378_codec_set_jack,
 	.endianness	  = 1,
 };
