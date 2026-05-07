@@ -4,14 +4,15 @@
 $id: http://devicetree.org/schemas/sound/qcom,wcd937x.yaml#
 $schema: http://devicetree.org/meta-schemas/core.yaml#
 
-title: Qualcomm WCD9370/WCD9375 Audio Codec
+title: Qualcomm WCD9370/WCD9375/WCD9378 Audio Codec
 
 maintainers:
   - Srinivas Kandagatla <srinivas.kandagatla@linaro.org>
 
 description:
-  Qualcomm WCD9370/WCD9375 Codec is a standalone Hi-Fi audio codec IC.
-  It has RX and TX Soundwire slave devices.
+  Qualcomm WCD9370/WCD9375/WCD9378 Codec is a standalone Hi-Fi audio codec IC.
+  It has RX and TX Soundwire slave devices. WCD9378 (Tambora) is an SDCA
+  compliant SoundWire 2.x codec with 5 RX and 5 TX SoundWire ports.
 
 allOf:
   - $ref: dai-common.yaml#
@@ -24,6 +25,8 @@ properties:
       - items:
           - const: qcom,wcd9375-codec
           - const: qcom,wcd9370-codec
+      - items:
+          - const: qcom,wcd9378-codec
 
   vdd-px-supply:
     description: A reference to the 1.8V I/O supply
@@ -79,4 +82,48 @@ examples:
             qcom,tx-port-mapping = <1 2 3 4>;
         };
     };
+  - |
+    #include <dt-bindings/gpio/gpio.h>
+    codec {
+        compatible = "qcom,wcd9378-codec";
+        pinctrl-names = "default", "sleep";
+        pinctrl-0 = <&wcd_reset_n>;
+        pinctrl-1 = <&wcd_reset_n_sleep>;
+        reset-gpios = <&tlmm 83 GPIO_ACTIVE_LOW>;
+        vdd-buck-supply = <&vreg_l17b_1p8>;
+        vdd-rxtx-supply = <&vreg_l18b_1p8>;
+        vdd-px-supply = <&vreg_l18b_1p8>;
+        vdd-mic-bias-supply = <&vreg_bob>;
+        qcom,micbias1-microvolt = <1800000>;
+        qcom,micbias2-microvolt = <1800000>;
+        qcom,micbias3-microvolt = <1800000>;
+        qcom,rx-device = <&wcd9378_rx>;
+        qcom,tx-device = <&wcd9378_tx>;
+        #sound-dai-cells = <1>;
+    };
+
+    /* ... */
+
+    soundwire@3210000 {
+        reg = <0x03210000 0x2000>;
+        #address-cells = <2>;
+        #size-cells = <0>;
+        wcd9378_rx: codec@0,4 {
+            compatible = "sdw20217010a00";
+            reg = <0 4>;
+            qcom,rx-port-mapping = <1 2 3 4 5>;
+        };
+    };
+
+    soundwire@3230000 {
+        reg = <0x03230000 0x2000>;
+        #address-cells = <2>;
+        #size-cells = <0>;
+        wcd9378_tx: codec@0,3 {
+            compatible = "sdw20217010a00";
+            reg = <0 3>;
+            qcom,tx-port-mapping = <1 2 3 4 5>;
+        };
+    };
+
 ...
