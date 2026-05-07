@@ -439,7 +439,7 @@ static int wcd9378_micbias_control(struct snd_soc_component *component,
 /* ------------------------------------------------------------------ */
 /* DAPM event callbacks — RX path                                      */
 /* ------------------------------------------------------------------ */
-static __maybe_unused int wcd9378_codec_hphl_dac_event(struct snd_soc_dapm_widget *w,
+static int wcd9378_codec_hphl_dac_event(struct snd_soc_dapm_widget *w,
 					struct snd_kcontrol *kcontrol,
 					int event)
 {
@@ -484,7 +484,7 @@ static __maybe_unused int wcd9378_codec_hphl_dac_event(struct snd_soc_dapm_widge
 	return 0;
 }
 
-static __maybe_unused int wcd9378_codec_hphr_dac_event(struct snd_soc_dapm_widget *w,
+static int wcd9378_codec_hphr_dac_event(struct snd_soc_dapm_widget *w,
 					struct snd_kcontrol *kcontrol,
 					int event)
 {
@@ -529,7 +529,7 @@ static __maybe_unused int wcd9378_codec_hphr_dac_event(struct snd_soc_dapm_widge
 	return 0;
 }
 
-static __maybe_unused int wcd9378_codec_ear_dac_event(struct snd_soc_dapm_widget *w,
+static int wcd9378_codec_ear_dac_event(struct snd_soc_dapm_widget *w,
 				       struct snd_kcontrol *kcontrol,
 				       int event)
 {
@@ -566,7 +566,7 @@ static __maybe_unused int wcd9378_codec_ear_dac_event(struct snd_soc_dapm_widget
 	return 0;
 }
 
-static __maybe_unused int wcd9378_codec_aux_dac_event(struct snd_soc_dapm_widget *w,
+static int wcd9378_codec_aux_dac_event(struct snd_soc_dapm_widget *w,
 				       struct snd_kcontrol *kcontrol,
 				       int event)
 {
@@ -595,7 +595,7 @@ static __maybe_unused int wcd9378_codec_aux_dac_event(struct snd_soc_dapm_widget
 	return 0;
 }
 
-static __maybe_unused int wcd9378_codec_enable_hphr_pa(struct snd_soc_dapm_widget *w,
+static int wcd9378_codec_enable_hphr_pa(struct snd_soc_dapm_widget *w,
 					struct snd_kcontrol *kcontrol,
 					int event)
 {
@@ -663,7 +663,7 @@ static __maybe_unused int wcd9378_codec_enable_hphr_pa(struct snd_soc_dapm_widge
 	return 0;
 }
 
-static __maybe_unused int wcd9378_codec_enable_hphl_pa(struct snd_soc_dapm_widget *w,
+static int wcd9378_codec_enable_hphl_pa(struct snd_soc_dapm_widget *w,
 					struct snd_kcontrol *kcontrol,
 					int event)
 {
@@ -731,7 +731,7 @@ static __maybe_unused int wcd9378_codec_enable_hphl_pa(struct snd_soc_dapm_widge
 	return 0;
 }
 
-static __maybe_unused int wcd9378_codec_enable_aux_pa(struct snd_soc_dapm_widget *w,
+static int wcd9378_codec_enable_aux_pa(struct snd_soc_dapm_widget *w,
 				       struct snd_kcontrol *kcontrol,
 				       int event)
 {
@@ -758,7 +758,7 @@ static __maybe_unused int wcd9378_codec_enable_aux_pa(struct snd_soc_dapm_widget
 	return 0;
 }
 
-static __maybe_unused int wcd9378_codec_enable_ear_pa(struct snd_soc_dapm_widget *w,
+static int wcd9378_codec_enable_ear_pa(struct snd_soc_dapm_widget *w,
 				       struct snd_kcontrol *kcontrol,
 				       int event)
 {
@@ -790,7 +790,7 @@ static __maybe_unused int wcd9378_codec_enable_ear_pa(struct snd_soc_dapm_widget
 	return 0;
 }
 
-static __maybe_unused int wcd9378_enable_rx1(struct snd_soc_dapm_widget *w,
+static int wcd9378_enable_rx1(struct snd_soc_dapm_widget *w,
 			      struct snd_kcontrol *kcontrol, int event)
 {
 	struct snd_soc_component *component = snd_soc_dapm_to_component(w->dapm);
@@ -801,7 +801,7 @@ static __maybe_unused int wcd9378_enable_rx1(struct snd_soc_dapm_widget *w,
 	return 0;
 }
 
-static __maybe_unused int wcd9378_enable_rx2(struct snd_soc_dapm_widget *w,
+static int wcd9378_enable_rx2(struct snd_soc_dapm_widget *w,
 			      struct snd_kcontrol *kcontrol, int event)
 {
 	struct snd_soc_component *component = snd_soc_dapm_to_component(w->dapm);
@@ -812,7 +812,7 @@ static __maybe_unused int wcd9378_enable_rx2(struct snd_soc_dapm_widget *w,
 	return 0;
 }
 
-static __maybe_unused int wcd9378_enable_rx3(struct snd_soc_dapm_widget *w,
+static int wcd9378_enable_rx3(struct snd_soc_dapm_widget *w,
 			      struct snd_kcontrol *kcontrol, int event)
 {
 	struct snd_soc_component *component = snd_soc_dapm_to_component(w->dapm);
@@ -826,7 +826,7 @@ static __maybe_unused int wcd9378_enable_rx3(struct snd_soc_dapm_widget *w,
 /* ------------------------------------------------------------------ */
 /* DAPM event callbacks — TX path                                      */
 /* ------------------------------------------------------------------ */
-static __maybe_unused int wcd9378_tx_swr_ctrl(struct snd_soc_dapm_widget *w,
+static int wcd9378_tx_swr_ctrl(struct snd_soc_dapm_widget *w,
 			       struct snd_kcontrol *kcontrol, int event)
 {
 	struct snd_soc_component *component = snd_soc_dapm_to_component(w->dapm);
@@ -839,7 +839,7 @@ static __maybe_unused int wcd9378_tx_swr_ctrl(struct snd_soc_dapm_widget *w,
 	return 0;
 }
 
-static __maybe_unused int wcd9378_codec_enable_adc(struct snd_soc_dapm_widget *w,
+static int wcd9378_codec_enable_adc(struct snd_soc_dapm_widget *w,
 				    struct snd_kcontrol *kcontrol, int event)
 {
 	struct snd_soc_component *component = snd_soc_dapm_to_component(w->dapm);
@@ -858,7 +858,7 @@ static __maybe_unused int wcd9378_codec_enable_adc(struct snd_soc_dapm_widget *w
 	return 0;
 }
 
-static __maybe_unused int wcd9378_codec_enable_dmic(struct snd_soc_dapm_widget *w,
+static int wcd9378_codec_enable_dmic(struct snd_soc_dapm_widget *w,
 				     struct snd_kcontrol *kcontrol, int event)
 {
 	struct snd_soc_component *component = snd_soc_dapm_to_component(w->dapm);
@@ -888,7 +888,7 @@ static __maybe_unused int wcd9378_codec_enable_dmic(struct snd_soc_dapm_widget *
 	return 0;
 }
 
-static __maybe_unused int wcd9378_codec_enable_micbias(struct snd_soc_dapm_widget *w,
+static int wcd9378_codec_enable_micbias(struct snd_soc_dapm_widget *w,
 					struct snd_kcontrol *kcontrol,
 					int event)
 {
@@ -911,7 +911,7 @@ static __maybe_unused int wcd9378_codec_enable_micbias(struct snd_soc_dapm_widge
 	return 0;
 }
 
-static __maybe_unused int wcd9378_codec_enable_micbias_pullup(struct snd_soc_dapm_widget *w,
+static int wcd9378_codec_enable_micbias_pullup(struct snd_soc_dapm_widget *w,
 					       struct snd_kcontrol *kcontrol,
 					       int event)
 {
@@ -1694,6 +1694,313 @@ static bool wcd9378_swap_gnd_mic(struct snd_soc_component *component)
 
 /* ------------------------------------------------------------------ */
 
+/* Patch 4 — DAPM widgets (playback + capture)                         */
+/* ------------------------------------------------------------------ */
+static const struct snd_kcontrol_new ear_rdac_switch[] = {
+	SOC_DAPM_SINGLE("Switch", SND_SOC_NOPM, 0, 1, 0)
+};
+
+static const struct snd_kcontrol_new aux_rdac_switch[] = {
+	SOC_DAPM_SINGLE("Switch", SND_SOC_NOPM, 0, 1, 0)
+};
+
+static const struct snd_kcontrol_new hphl_rdac_switch[] = {
+	SOC_DAPM_SINGLE("Switch", SND_SOC_NOPM, 0, 1, 0)
+};
+
+static const struct snd_kcontrol_new hphr_rdac_switch[] = {
+	SOC_DAPM_SINGLE("Switch", SND_SOC_NOPM, 0, 1, 0)
+};
+
+static const char * const rdac3_mux_text[] = {
+	"RX1", "RX3"
+};
+
+static const struct soc_enum rdac3_enum =
+	SOC_ENUM_SINGLE(WCD9378_CDC_EAR_PATH_CTL, 0,
+			ARRAY_SIZE(rdac3_mux_text), rdac3_mux_text);
+
+static const struct snd_kcontrol_new rx_rdac3_mux =
+	SOC_DAPM_ENUM("RDAC3_MUX Mux", rdac3_enum);
+
+static const struct snd_kcontrol_new adc1_switch[] = {
+	SOC_DAPM_SINGLE("Switch", SND_SOC_NOPM, 0, 1, 0)
+};
+
+static const struct snd_kcontrol_new adc2_switch[] = {
+	SOC_DAPM_SINGLE("Switch", SND_SOC_NOPM, 0, 1, 0)
+};
+
+static const struct snd_kcontrol_new adc3_switch[] = {
+	SOC_DAPM_SINGLE("Switch", SND_SOC_NOPM, 0, 1, 0)
+};
+
+static const struct snd_kcontrol_new dmic0_switch[] = {
+	SOC_DAPM_SINGLE("Switch", SND_SOC_NOPM, 0, 1, 0)
+};
+
+static const struct snd_kcontrol_new dmic1_switch[] = {
+	SOC_DAPM_SINGLE("Switch", SND_SOC_NOPM, 0, 1, 0)
+};
+
+static const struct snd_kcontrol_new dmic2_switch[] = {
+	SOC_DAPM_SINGLE("Switch", SND_SOC_NOPM, 0, 1, 0)
+};
+
+static const struct snd_kcontrol_new dmic3_switch[] = {
+	SOC_DAPM_SINGLE("Switch", SND_SOC_NOPM, 0, 1, 0)
+};
+
+static const struct snd_kcontrol_new dmic4_switch[] = {
+	SOC_DAPM_SINGLE("Switch", SND_SOC_NOPM, 0, 1, 0)
+};
+
+static const struct snd_kcontrol_new dmic5_switch[] = {
+	SOC_DAPM_SINGLE("Switch", SND_SOC_NOPM, 0, 1, 0)
+};
+
+static const struct snd_kcontrol_new dmic6_switch[] = {
+	SOC_DAPM_SINGLE("Switch", SND_SOC_NOPM, 0, 1, 0)
+};
+
+static const struct snd_kcontrol_new dmic7_switch[] = {
+	SOC_DAPM_SINGLE("Switch", SND_SOC_NOPM, 0, 1, 0)
+};
+
+static const char * const adc2_mux_text[] = {
+	"INP2", "INP3"
+};
+
+static const struct soc_enum adc2_enum =
+	SOC_ENUM_SINGLE(WCD9378_TX_NEW_TX_CH12_MUX,
+			WCD9378_TX_CH12_MUX_CH2_SEL_SHIFT,
+			ARRAY_SIZE(adc2_mux_text), adc2_mux_text);
+
+static const struct snd_kcontrol_new tx_adc2_mux =
+	SOC_DAPM_ENUM("ADC2 MUX Mux", adc2_enum);
+
+static const struct snd_soc_dapm_widget wcd9378_dapm_widgets[] = {
+	/* RX input ports */
+	SND_SOC_DAPM_INPUT("IN1_HPHL"),
+	SND_SOC_DAPM_INPUT("IN2_HPHR"),
+	SND_SOC_DAPM_INPUT("IN3_AUX"),
+
+	/* DSD input ports */
+	SND_SOC_DAPM_INPUT("IN_DSD_L"),
+	SND_SOC_DAPM_INPUT("IN_DSD_R"),
+
+	/* Supply widgets */
+	SND_SOC_DAPM_SUPPLY("VDD_BUCK", SND_SOC_NOPM, 0, 0, NULL, 0),
+	SND_SOC_DAPM_SUPPLY_S("CLS_H_PORT", 1, SND_SOC_NOPM, 0, 0, NULL, 0),
+
+	/* RX mixer widgets */
+	SND_SOC_DAPM_MIXER_E("RX1", SND_SOC_NOPM, 0, 0, NULL, 0,
+			     wcd9378_enable_rx1,
+			     SND_SOC_DAPM_PRE_PMU | SND_SOC_DAPM_POST_PMD),
+	SND_SOC_DAPM_MIXER_E("RX2", SND_SOC_NOPM, 0, 0, NULL, 0,
+			     wcd9378_enable_rx2,
+			     SND_SOC_DAPM_PRE_PMU | SND_SOC_DAPM_POST_PMD),
+	SND_SOC_DAPM_MIXER_E("RX3", SND_SOC_NOPM, 0, 0, NULL, 0,
+			     wcd9378_enable_rx3,
+			     SND_SOC_DAPM_PRE_PMU | SND_SOC_DAPM_POST_PMD),
+
+	/* RDAC3 MUX — selects RX1 (HPH-L) or RX3 (AUX) for EAR path */
+	SND_SOC_DAPM_MUX("RDAC3_MUX", SND_SOC_NOPM, 0, 0, &rx_rdac3_mux),
+
+	/* DAC widgets */
+	SND_SOC_DAPM_DAC_E("RDAC1", NULL, SND_SOC_NOPM, 0, 0,
+			   wcd9378_codec_hphl_dac_event,
+			   SND_SOC_DAPM_PRE_PMU | SND_SOC_DAPM_POST_PMU |
+			   SND_SOC_DAPM_PRE_PMD | SND_SOC_DAPM_POST_PMD),
+	SND_SOC_DAPM_DAC_E("RDAC2", NULL, SND_SOC_NOPM, 0, 0,
+			   wcd9378_codec_hphr_dac_event,
+			   SND_SOC_DAPM_PRE_PMU | SND_SOC_DAPM_POST_PMU |
+			   SND_SOC_DAPM_PRE_PMD | SND_SOC_DAPM_POST_PMD),
+	SND_SOC_DAPM_DAC_E("RDAC3", NULL, SND_SOC_NOPM, 0, 0,
+			   wcd9378_codec_ear_dac_event,
+			   SND_SOC_DAPM_PRE_PMU | SND_SOC_DAPM_POST_PMU |
+			   SND_SOC_DAPM_PRE_PMD | SND_SOC_DAPM_POST_PMD),
+	SND_SOC_DAPM_DAC_E("RDAC4", NULL, SND_SOC_NOPM, 0, 0,
+			   wcd9378_codec_aux_dac_event,
+			   SND_SOC_DAPM_PRE_PMU | SND_SOC_DAPM_POST_PMU |
+			   SND_SOC_DAPM_PRE_PMD | SND_SOC_DAPM_POST_PMD),
+
+	/* RDAC switch mixers */
+	SND_SOC_DAPM_MIXER("EAR_RDAC", SND_SOC_NOPM, 0, 0,
+			   ear_rdac_switch, ARRAY_SIZE(ear_rdac_switch)),
+	SND_SOC_DAPM_MIXER("AUX_RDAC", SND_SOC_NOPM, 0, 0,
+			   aux_rdac_switch, ARRAY_SIZE(aux_rdac_switch)),
+	SND_SOC_DAPM_MIXER("HPHL_RDAC", SND_SOC_NOPM, 0, 0,
+			   hphl_rdac_switch, ARRAY_SIZE(hphl_rdac_switch)),
+	SND_SOC_DAPM_MIXER("HPHR_RDAC", SND_SOC_NOPM, 0, 0,
+			   hphr_rdac_switch, ARRAY_SIZE(hphr_rdac_switch)),
+
+	/* PA widgets */
+	SND_SOC_DAPM_PGA_E("HPHL PGA", WCD9378_ANA_HPH, 7, 0, NULL, 0,
+			   wcd9378_codec_enable_hphl_pa,
+			   SND_SOC_DAPM_PRE_PMU | SND_SOC_DAPM_POST_PMU |
+			   SND_SOC_DAPM_PRE_PMD | SND_SOC_DAPM_POST_PMD),
+	SND_SOC_DAPM_PGA_E("HPHR PGA", WCD9378_ANA_HPH, 6, 0, NULL, 0,
+			   wcd9378_codec_enable_hphr_pa,
+			   SND_SOC_DAPM_PRE_PMU | SND_SOC_DAPM_POST_PMU |
+			   SND_SOC_DAPM_PRE_PMD | SND_SOC_DAPM_POST_PMD),
+	SND_SOC_DAPM_PGA_E("EAR PGA", WCD9378_ANA_EAR, 7, 0, NULL, 0,
+			   wcd9378_codec_enable_ear_pa,
+			   SND_SOC_DAPM_PRE_PMU | SND_SOC_DAPM_POST_PMU |
+			   SND_SOC_DAPM_PRE_PMD | SND_SOC_DAPM_POST_PMD),
+	SND_SOC_DAPM_PGA_E("AUX PGA", WCD9378_AUX_AUXPA, 7, 0, NULL, 0,
+			   wcd9378_codec_enable_aux_pa,
+			   SND_SOC_DAPM_PRE_PMU | SND_SOC_DAPM_POST_PMU |
+			   SND_SOC_DAPM_PRE_PMD | SND_SOC_DAPM_POST_PMD),
+
+	/* DSD PGA widgets — bypass interpolator chain */
+	SND_SOC_DAPM_PGA("DSD_L PGA", SND_SOC_NOPM, 0, 0, NULL, 0),
+	SND_SOC_DAPM_PGA("DSD_R PGA", SND_SOC_NOPM, 0, 0, NULL, 0),
+
+	/* RX output ports */
+	SND_SOC_DAPM_OUTPUT("HPHL"),
+	SND_SOC_DAPM_OUTPUT("HPHR"),
+	SND_SOC_DAPM_OUTPUT("EAR"),
+	SND_SOC_DAPM_OUTPUT("AUX"),
+
+	/* Capture widgets */
+	/* AMIC input ports */
+	SND_SOC_DAPM_INPUT("AMIC1"),
+	SND_SOC_DAPM_INPUT("AMIC2"),
+	SND_SOC_DAPM_INPUT("AMIC3"),
+
+	/* ADC widgets */
+	SND_SOC_DAPM_ADC_E("ADC1", NULL, SND_SOC_NOPM, 0, 0,
+			   wcd9378_codec_enable_adc,
+			   SND_SOC_DAPM_PRE_PMU | SND_SOC_DAPM_POST_PMD),
+	SND_SOC_DAPM_ADC_E("ADC2", NULL, SND_SOC_NOPM, 1, 0,
+			   wcd9378_codec_enable_adc,
+			   SND_SOC_DAPM_PRE_PMU | SND_SOC_DAPM_POST_PMD),
+	SND_SOC_DAPM_ADC_E("ADC3", NULL, SND_SOC_NOPM, 2, 0,
+			   wcd9378_codec_enable_adc,
+			   SND_SOC_DAPM_PRE_PMU | SND_SOC_DAPM_POST_PMD),
+
+	/* ADC2 input mux — selects AMIC2 or AMIC3 */
+	SND_SOC_DAPM_MUX("ADC2 MUX", SND_SOC_NOPM, 0, 0, &tx_adc2_mux),
+
+	/* DMIC widgets — DMIC0-7 across 2 physical TX SoundWire lanes */
+	SND_SOC_DAPM_ADC_E("DMIC0", NULL, SND_SOC_NOPM, 0, 0,
+			   wcd9378_codec_enable_dmic,
+			   SND_SOC_DAPM_PRE_PMU | SND_SOC_DAPM_POST_PMD),
+	SND_SOC_DAPM_ADC_E("DMIC1", NULL, SND_SOC_NOPM, 1, 0,
+			   wcd9378_codec_enable_dmic,
+			   SND_SOC_DAPM_PRE_PMU | SND_SOC_DAPM_POST_PMD),
+	SND_SOC_DAPM_ADC_E("DMIC2", NULL, SND_SOC_NOPM, 2, 0,
+			   wcd9378_codec_enable_dmic,
+			   SND_SOC_DAPM_PRE_PMU | SND_SOC_DAPM_POST_PMD),
+	SND_SOC_DAPM_ADC_E("DMIC3", NULL, SND_SOC_NOPM, 3, 0,
+			   wcd9378_codec_enable_dmic,
+			   SND_SOC_DAPM_PRE_PMU | SND_SOC_DAPM_POST_PMD),
+	SND_SOC_DAPM_ADC_E("DMIC4", NULL, SND_SOC_NOPM, 4, 0,
+			   wcd9378_codec_enable_dmic,
+			   SND_SOC_DAPM_PRE_PMU | SND_SOC_DAPM_POST_PMD),
+	SND_SOC_DAPM_ADC_E("DMIC5", NULL, SND_SOC_NOPM, 5, 0,
+			   wcd9378_codec_enable_dmic,
+			   SND_SOC_DAPM_PRE_PMU | SND_SOC_DAPM_POST_PMD),
+	SND_SOC_DAPM_ADC_E("DMIC6", NULL, SND_SOC_NOPM, 6, 0,
+			   wcd9378_codec_enable_dmic,
+			   SND_SOC_DAPM_PRE_PMU | SND_SOC_DAPM_POST_PMD),
+	SND_SOC_DAPM_ADC_E("DMIC7", NULL, SND_SOC_NOPM, 7, 0,
+			   wcd9378_codec_enable_dmic,
+			   SND_SOC_DAPM_PRE_PMU | SND_SOC_DAPM_POST_PMD),
+
+	/* TX SoundWire mixer widgets */
+	SND_SOC_DAPM_MIXER_E("ADC1_MIXER", SND_SOC_NOPM, 0, 0,
+			     adc1_switch, ARRAY_SIZE(adc1_switch),
+			     wcd9378_tx_swr_ctrl,
+			     SND_SOC_DAPM_PRE_PMU | SND_SOC_DAPM_POST_PMD),
+	SND_SOC_DAPM_MIXER_E("ADC2_MIXER", SND_SOC_NOPM, 1, 0,
+			     adc2_switch, ARRAY_SIZE(adc2_switch),
+			     wcd9378_tx_swr_ctrl,
+			     SND_SOC_DAPM_PRE_PMU | SND_SOC_DAPM_POST_PMD),
+	SND_SOC_DAPM_MIXER_E("ADC3_MIXER", SND_SOC_NOPM, 2, 0,
+			     adc3_switch, ARRAY_SIZE(adc3_switch),
+			     wcd9378_tx_swr_ctrl,
+			     SND_SOC_DAPM_PRE_PMU | SND_SOC_DAPM_POST_PMD),
+	SND_SOC_DAPM_MIXER_E("DMIC0_MIXER", SND_SOC_NOPM, 0, 0,
+			     dmic0_switch, ARRAY_SIZE(dmic0_switch),
+			     wcd9378_tx_swr_ctrl,
+			     SND_SOC_DAPM_PRE_PMU | SND_SOC_DAPM_POST_PMD),
+	SND_SOC_DAPM_MIXER_E("DMIC1_MIXER", SND_SOC_NOPM, 1, 0,
+			     dmic1_switch, ARRAY_SIZE(dmic1_switch),
+			     wcd9378_tx_swr_ctrl,
+			     SND_SOC_DAPM_PRE_PMU | SND_SOC_DAPM_POST_PMD),
+	SND_SOC_DAPM_MIXER_E("DMIC2_MIXER", SND_SOC_NOPM, 2, 0,
+			     dmic2_switch, ARRAY_SIZE(dmic2_switch),
+			     wcd9378_tx_swr_ctrl,
+			     SND_SOC_DAPM_PRE_PMU | SND_SOC_DAPM_POST_PMD),
+	SND_SOC_DAPM_MIXER_E("DMIC3_MIXER", SND_SOC_NOPM, 3, 0,
+			     dmic3_switch, ARRAY_SIZE(dmic3_switch),
+			     wcd9378_tx_swr_ctrl,
+			     SND_SOC_DAPM_PRE_PMU | SND_SOC_DAPM_POST_PMD),
+	SND_SOC_DAPM_MIXER_E("DMIC4_MIXER", SND_SOC_NOPM, 4, 0,
+			     dmic4_switch, ARRAY_SIZE(dmic4_switch),
+			     wcd9378_tx_swr_ctrl,
+			     SND_SOC_DAPM_PRE_PMU | SND_SOC_DAPM_POST_PMD),
+	SND_SOC_DAPM_MIXER_E("DMIC5_MIXER", SND_SOC_NOPM, 5, 0,
+			     dmic5_switch, ARRAY_SIZE(dmic5_switch),
+			     wcd9378_tx_swr_ctrl,
+			     SND_SOC_DAPM_PRE_PMU | SND_SOC_DAPM_POST_PMD),
+	SND_SOC_DAPM_MIXER_E("DMIC6_MIXER", SND_SOC_NOPM, 6, 0,
+			     dmic6_switch, ARRAY_SIZE(dmic6_switch),
+			     wcd9378_tx_swr_ctrl,
+			     SND_SOC_DAPM_PRE_PMU | SND_SOC_DAPM_POST_PMD),
+	SND_SOC_DAPM_MIXER_E("DMIC7_MIXER", SND_SOC_NOPM, 7, 0,
+			     dmic7_switch, ARRAY_SIZE(dmic7_switch),
+			     wcd9378_tx_swr_ctrl,
+			     SND_SOC_DAPM_PRE_PMU | SND_SOC_DAPM_POST_PMD),
+
+	/* Micbias supply widgets */
+	SND_SOC_DAPM_SUPPLY("MIC BIAS1", SND_SOC_NOPM, MIC_BIAS_1, 0,
+			    wcd9378_codec_enable_micbias,
+			    SND_SOC_DAPM_PRE_PMU | SND_SOC_DAPM_POST_PMU |
+			    SND_SOC_DAPM_POST_PMD),
+	SND_SOC_DAPM_SUPPLY("MIC BIAS2", SND_SOC_NOPM, MIC_BIAS_2, 0,
+			    wcd9378_codec_enable_micbias,
+			    SND_SOC_DAPM_PRE_PMU | SND_SOC_DAPM_POST_PMU |
+			    SND_SOC_DAPM_POST_PMD),
+	SND_SOC_DAPM_SUPPLY("MIC BIAS3", SND_SOC_NOPM, MIC_BIAS_3, 0,
+			    wcd9378_codec_enable_micbias,
+			    SND_SOC_DAPM_PRE_PMU | SND_SOC_DAPM_POST_PMU |
+			    SND_SOC_DAPM_POST_PMD),
+
+	/* VA micbias pull-up supply widgets */
+	SND_SOC_DAPM_SUPPLY("VA MIC BIAS1", SND_SOC_NOPM, MIC_BIAS_1, 0,
+			    wcd9378_codec_enable_micbias_pullup,
+			    SND_SOC_DAPM_PRE_PMU | SND_SOC_DAPM_POST_PMU |
+			    SND_SOC_DAPM_POST_PMD),
+	SND_SOC_DAPM_SUPPLY("VA MIC BIAS2", SND_SOC_NOPM, MIC_BIAS_2, 0,
+			    wcd9378_codec_enable_micbias_pullup,
+			    SND_SOC_DAPM_PRE_PMU | SND_SOC_DAPM_POST_PMU |
+			    SND_SOC_DAPM_POST_PMD),
+	SND_SOC_DAPM_SUPPLY("VA MIC BIAS3", SND_SOC_NOPM, MIC_BIAS_3, 0,
+			    wcd9378_codec_enable_micbias_pullup,
+			    SND_SOC_DAPM_PRE_PMU | SND_SOC_DAPM_POST_PMU |
+			    SND_SOC_DAPM_POST_PMD),
+
+	/* TX output ports */
+	SND_SOC_DAPM_OUTPUT("ADC1_OUTPUT"),
+	SND_SOC_DAPM_OUTPUT("ADC2_OUTPUT"),
+	SND_SOC_DAPM_OUTPUT("ADC3_OUTPUT"),
+	SND_SOC_DAPM_OUTPUT("DMIC0_OUTPUT"),
+	SND_SOC_DAPM_OUTPUT("DMIC1_OUTPUT"),
+	SND_SOC_DAPM_OUTPUT("DMIC2_OUTPUT"),
+	SND_SOC_DAPM_OUTPUT("DMIC3_OUTPUT"),
+	SND_SOC_DAPM_OUTPUT("DMIC4_OUTPUT"),
+	SND_SOC_DAPM_OUTPUT("DMIC5_OUTPUT"),
+	SND_SOC_DAPM_OUTPUT("DMIC6_OUTPUT"),
+	SND_SOC_DAPM_OUTPUT("DMIC7_OUTPUT"),
+	SND_SOC_DAPM_OUTPUT("WCD_TX_OUTPUT"),
+};
+
+
+/* ------------------------------------------------------------------ */
+
 /* Component probe / remove / set_jack                                 */
 /* ------------------------------------------------------------------ */
 static int wcd9378_soc_codec_probe(struct snd_soc_component *component)
@@ -1816,6 +2123,8 @@ static const struct snd_soc_component_driver soc_codec_dev_wcd9378 = {
 	.name		  = "wcd937x_codec",
 	.probe		  = wcd9378_soc_codec_probe,
 	.remove		  = wcd9378_soc_codec_remove,
+	.dapm_widgets	  = wcd9378_dapm_widgets,
+	.num_dapm_widgets = ARRAY_SIZE(wcd9378_dapm_widgets),
 	.set_jack	  = wcd9378_codec_set_jack,
 	.endianness	  = 1,
 };
