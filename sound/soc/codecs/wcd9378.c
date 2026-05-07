@@ -2001,6 +2001,140 @@ static const struct snd_soc_dapm_widget wcd9378_dapm_widgets[] = {
 
 /* ------------------------------------------------------------------ */
 
+/* Patch 6 — Mixer kcontrols                                           */
+/* ------------------------------------------------------------------ */
+static int wcd9378_get_swr_port(struct snd_kcontrol *kcontrol,
+				struct snd_ctl_elem_value *ucontrol)
+{
+	struct snd_soc_component *component = snd_kcontrol_chip(kcontrol);
+	struct wcd9378_priv *wcd9378 = snd_soc_component_get_drvdata(component);
+	struct wcd9378_sdw_priv *wcd;
+	struct soc_mixer_control *mixer =
+		(struct soc_mixer_control *)kcontrol->private_value;
+	int dai_id = mixer->shift;
+	int ch_idx = mixer->reg;
+	int val;
+
+	wcd = wcd9378->sdw_priv[dai_id];
+	val = wcd->ch_info[ch_idx].master_ch_mask ? 1 : 0;
+	ucontrol->value.integer.value[0] = val;
+
+	return 0;
+}
+
+static int wcd9378_set_swr_port(struct snd_kcontrol *kcontrol,
+				struct snd_ctl_elem_value *ucontrol)
+{
+	struct snd_soc_component *component = snd_kcontrol_chip(kcontrol);
+	struct wcd9378_priv *wcd9378 = snd_soc_component_get_drvdata(component);
+	struct wcd9378_sdw_priv *wcd;
+	struct soc_mixer_control *mixer =
+		(struct soc_mixer_control *)kcontrol->private_value;
+	int dai_id = mixer->shift;
+	int ch_idx = mixer->reg;
+
+	wcd = wcd9378->sdw_priv[dai_id];
+	if (ucontrol->value.integer.value[0])
+		wcd->ch_info[ch_idx].master_ch_mask =
+			WCD9378_SWRM_CH_MASK(ch_idx + 1);
+	else
+		wcd->ch_info[ch_idx].master_ch_mask = 0;
+
+	return 0;
+}
+
+static int wcd9378_rx_hph_mode_get(struct snd_kcontrol *kcontrol,
+				   struct snd_ctl_elem_value *ucontrol)
+{
+	struct snd_soc_component *component = snd_kcontrol_chip(kcontrol);
+	struct wcd9378_priv *wcd9378 = snd_soc_component_get_drvdata(component);
+
+	ucontrol->value.integer.value[0] = wcd9378->hph_mode;
+
+	return 0;
+}
+
+static int wcd9378_rx_hph_mode_put(struct snd_kcontrol *kcontrol,
+				   struct snd_ctl_elem_value *ucontrol)
+{
+	struct snd_soc_component *component = snd_kcontrol_chip(kcontrol);
+	struct wcd9378_priv *wcd9378 = snd_soc_component_get_drvdata(component);
+	u32 mode_val;
+
+	mode_val = ucontrol->value.enumerated.item[0];
+	if (mode_val == 0) {
+		dev_err(component->dev, "%s: Invalid HPH Mode\n", __func__);
+		return -EINVAL;
+	}
+	wcd9378->hph_mode = mode_val;
+
+	return 0;
+}
+
+static const char * const rx_hph_mode_mux_text[] = {
+	"CLS_H_INVALID", "CLS_H_HIFI", "CLS_H_LP", "CLS_AB",
+	"CLS_H_LOHIFI", "CLS_H_ULP", "CLS_AB_HIFI",
+};
+
+static const struct soc_enum rx_hph_mode_mux_enum =
+	SOC_ENUM_SINGLE_EXT(ARRAY_SIZE(rx_hph_mode_mux_text),
+			    rx_hph_mode_mux_text);
+
+static const struct snd_kcontrol_new wcd9378_snd_controls[] = {
+	SOC_SINGLE_TLV("EAR_PA Volume", WCD9378_ANA_EAR_COMPANDER_CTL,
+		       2, 0x10, 0, ear_pa_gain),
+	SOC_ENUM_EXT("RX HPH Mode", rx_hph_mode_mux_enum,
+		     wcd9378_rx_hph_mode_get, wcd9378_rx_hph_mode_put),
+
+	SOC_SINGLE_TLV("HPHL Volume", WCD9378_HPH_L_EN, 0, 20, 1, line_gain),
+	SOC_SINGLE_TLV("HPHR Volume", WCD9378_HPH_R_EN, 0, 20, 1, line_gain),
+	SOC_SINGLE_TLV("ADC1 Volume", WCD9378_ANA_TX_CH1, 0, 20, 0, analog_gain),
+	SOC_SINGLE_TLV("ADC2 Volume", WCD9378_ANA_TX_CH2, 0, 20, 0, analog_gain),
+	SOC_SINGLE_TLV("ADC3 Volume", WCD9378_ANA_TX_CH3, 0, 20, 0, analog_gain),
+
+	/* RX SoundWire port enable switches */
+	SOC_SINGLE_EXT("HPHL Switch", WCD9378_HPH_L, 0, 1, 0,
+		       wcd9378_get_swr_port, wcd9378_set_swr_port),
+	SOC_SINGLE_EXT("HPHR Switch", WCD9378_HPH_R, 0, 1, 0,
+		       wcd9378_get_swr_port, wcd9378_set_swr_port),
+	SOC_SINGLE_EXT("LO Switch", WCD9378_LO, 0, 1, 0,
+		       wcd9378_get_swr_port, wcd9378_set_swr_port),
+	SOC_SINGLE_EXT("CLSH PA Switch", WCD9378_CLSH, 0, 1, 0,
+		       wcd9378_get_swr_port, wcd9378_set_swr_port),
+	SOC_SINGLE_EXT("DSD_L Switch", WCD9378_DSD_L, 0, 1, 0,
+		       wcd9378_get_swr_port, wcd9378_set_swr_port),
+	SOC_SINGLE_EXT("DSD_R Switch", WCD9378_DSD_R, 0, 1, 0,
+		       wcd9378_get_swr_port, wcd9378_set_swr_port),
+
+	/* TX SoundWire port enable switches */
+	SOC_SINGLE_EXT("ADC1 Switch", WCD9378_ADC1, 1, 1, 0,
+		       wcd9378_get_swr_port, wcd9378_set_swr_port),
+	SOC_SINGLE_EXT("ADC2 Switch", WCD9378_ADC2, 1, 1, 0,
+		       wcd9378_get_swr_port, wcd9378_set_swr_port),
+	SOC_SINGLE_EXT("ADC3 Switch", WCD9378_ADC3, 1, 1, 0,
+		       wcd9378_get_swr_port, wcd9378_set_swr_port),
+	SOC_SINGLE_EXT("DMIC0 Switch", WCD9378_DMIC0, 1, 1, 0,
+		       wcd9378_get_swr_port, wcd9378_set_swr_port),
+	SOC_SINGLE_EXT("DMIC1 Switch", WCD9378_DMIC1, 1, 1, 0,
+		       wcd9378_get_swr_port, wcd9378_set_swr_port),
+	SOC_SINGLE_EXT("MBHC Switch", WCD9378_MBHC, 1, 1, 0,
+		       wcd9378_get_swr_port, wcd9378_set_swr_port),
+	SOC_SINGLE_EXT("DMIC2 Switch", WCD9378_DMIC2, 1, 1, 0,
+		       wcd9378_get_swr_port, wcd9378_set_swr_port),
+	SOC_SINGLE_EXT("DMIC3 Switch", WCD9378_DMIC3, 1, 1, 0,
+		       wcd9378_get_swr_port, wcd9378_set_swr_port),
+	SOC_SINGLE_EXT("DMIC4 Switch", WCD9378_DMIC4, 1, 1, 0,
+		       wcd9378_get_swr_port, wcd9378_set_swr_port),
+	SOC_SINGLE_EXT("DMIC5 Switch", WCD9378_DMIC5, 1, 1, 0,
+		       wcd9378_get_swr_port, wcd9378_set_swr_port),
+	SOC_SINGLE_EXT("DMIC6 Switch", WCD9378_DMIC6, 1, 1, 0,
+		       wcd9378_get_swr_port, wcd9378_set_swr_port),
+	SOC_SINGLE_EXT("DMIC7 Switch", WCD9378_DMIC7, 1, 1, 0,
+		       wcd9378_get_swr_port, wcd9378_set_swr_port),
+};
+
+/* ------------------------------------------------------------------ */
+
 /* Component probe / remove / set_jack                                 */
 /* ------------------------------------------------------------------ */
 static int wcd9378_soc_codec_probe(struct snd_soc_component *component)
@@ -2123,6 +2257,8 @@ static const struct snd_soc_component_driver soc_codec_dev_wcd9378 = {
 	.name		  = "wcd937x_codec",
 	.probe		  = wcd9378_soc_codec_probe,
 	.remove		  = wcd9378_soc_codec_remove,
+	.controls	  = wcd9378_snd_controls,
+	.num_controls	  = ARRAY_SIZE(wcd9378_snd_controls),
 	.dapm_widgets	  = wcd9378_dapm_widgets,
 	.num_dapm_widgets = ARRAY_SIZE(wcd9378_dapm_widgets),
 	.set_jack	  = wcd9378_codec_set_jack,
