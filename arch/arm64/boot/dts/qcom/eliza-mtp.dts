@@ -536,7 +536,7 @@
 	vdd3-supply = <&vreg_l17b>;
 };
 
-&qupv3_id_0 {
+&qupv3_1 {
 	status = "okay";
 };
 
