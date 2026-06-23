@@ -1915,6 +1915,9 @@
 
 			dma-coherent;
 
+			pinctrl-0 = <&pcie0_default_state>;
+			pinctrl-names = "default";
+
 			status = "disabled";
 
 			pcie0_opp_table: opp-table {
@@ -2065,8 +2068,8 @@
 
 			operating-points-v2 = <&pcie1_opp_table>;
 
-			iommu-map = <0 &apps_smmu 0x1400 0x1>,
-				    <0x100 &apps_smmu 0x1401 0x1>;
+			iommu-map = <0 &apps_smmu 0x1400 0x1>;
+			iommu-map-mask = <0x0>;
 
 			interrupt-map = <0 0 0 1 &intc 0 0 0 149 IRQ_TYPE_LEVEL_HIGH>,
 					<0 0 0 2 &intc 0 0 0 150 IRQ_TYPE_LEVEL_HIGH>,
@@ -2080,6 +2083,9 @@
 			bus-range = <0 0xff>;
 
 			dma-coherent;
+
+			pinctrl-0 = <&pcie1_default_state>;
+			pinctrl-names = "default";
 
 			status = "disabled";
 
