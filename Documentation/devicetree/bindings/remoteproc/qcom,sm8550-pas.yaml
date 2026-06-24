@@ -36,6 +36,7 @@ properties:
           - const: qcom,sm8550-adsp-pas
       - items:
           - enum:
+              - qcom,eliza-cdsp-pas
               - qcom,glymur-cdsp-pas
               - qcom,hawi-cdsp-pas
               - qcom,kaanapali-cdsp-pas
