@@ -48,6 +48,7 @@ enum wcd_codec_version {
 	WCD937X  = 2,
 	WCD938X  = 3,
 	WCD939X  = 4,
+	WCD9378  = 5,
 };
 struct wcd_clsh_ctrl;
 

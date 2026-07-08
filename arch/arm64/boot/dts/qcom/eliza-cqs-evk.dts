@@ -20,6 +20,22 @@
 
 		audio-routing = "SpkrLeft IN", "WSA_SPK1 OUT",
 				"SpkrRight IN", "WSA_SPK2 OUT",
+				"IN1_HPHL", "HPHL_OUT",
+				"IN2_HPHR", "HPHR_OUT",
+				"IN3_AUX", "AUX_OUT",
+				"TX SWR_INPUT0", "ADC1_OUTPUT",
+				"TX SWR_INPUT1", "ADC2_OUTPUT",
+				"TX SWR_INPUT2", "ADC3_OUTPUT",
+				"AMIC1", "MIC BIAS1",
+				"AMIC2", "MIC BIAS2",
+				"AMIC3", "MIC BIAS3",
+				"TX SWR_INPUT4", "DMIC1_OUTPUT",
+				"TX SWR_INPUT5", "DMIC2_OUTPUT",
+				"TX SWR_INPUT6", "DMIC3_OUTPUT",
+				"TX SWR_INPUT7", "DMIC4_OUTPUT",
+				"TX SWR_INPUT8", "DMIC5_OUTPUT",
+				"TX SWR_INPUT9", "DMIC6_OUTPUT",
+				"TX SWR_INPUT10", "DMIC7_OUTPUT",
 				"VA DMIC0", "vdd-micb",
 				"VA DMIC1", "vdd-micb",
 				"VA DMIC2", "vdd-micb",
@@ -38,6 +54,40 @@
 
 			codec {
 				sound-dai = <&lpass_vamacro 0>;
+			};
+
+			platform {
+				sound-dai = <&q6apm>;
+			};
+		};
+
+		wcd-playback-dai-link {
+			link-name = "WCD9378 Playback";
+
+			cpu {
+				sound-dai = <&q6apmbedai RX_CODEC_DMA_RX_0>;
+			};
+
+			codec {
+				sound-dai = <&wcd9378 0>, <&swr1 0>,
+					    <&lpass_rxmacro 0>;
+			};
+
+			platform {
+				sound-dai = <&q6apm>;
+			};
+		};
+
+		wcd-capture-dai-link {
+			link-name = "WCD9378 Capture";
+
+			cpu {
+				sound-dai = <&q6apmbedai TX_CODEC_DMA_TX_3>;
+			};
+
+			codec {
+				sound-dai = <&wcd9378 1>, <&swr2 0>,
+					    <&lpass_txmacro 0>;
 			};
 
 			platform {
@@ -70,6 +120,38 @@
 		regulator-max-microvolt = <1800000>;
 		vin-supply = <&vreg_bob>;
 	};
+
+	wcd9378: audio-codec {
+		compatible = "qcom,wcd9378-codec";
+
+		pinctrl-0 = <&wcd_reset_n>;
+		pinctrl-names = "default";
+
+		reset-gpios = <&tlmm 150 GPIO_ACTIVE_LOW>;
+
+		vdd-buck-supply = <&vreg_l7b>;
+		vdd-rxtx-supply = <&vreg_l7b>;
+		vdd-px-supply = <&vreg_l7b>;
+		vdd-mic-bias-supply = <&vreg_bob>;
+
+		qcom,micbias1-microvolt = <1800000>;
+		qcom,micbias2-microvolt = <1800000>;
+		qcom,micbias3-microvolt = <1800000>;
+
+		/* MBHC configuration */
+		qcom,hphl-jack-type-normally-closed;
+		qcom,ground-jack-type-normally-closed;
+		qcom,mbhc-headset-vthreshold-microvolt = <1700000>;
+		qcom,mbhc-headphone-vthreshold-microvolt = <50000>;
+		qcom,mbhc-buttons-vthreshold-microvolt = <75000 150000 237000
+							   500000 500000 500000
+							   500000 500000>;
+
+		qcom,rx-device = <&wcd9378_rx>;
+		qcom,tx-device = <&wcd9378_tx>;
+
+		#sound-dai-cells = <1>;
+	};
 };
 
 &tlmm {
@@ -88,6 +170,13 @@
 		bias-disable;
 		output-low;
 	};
+
+	wcd_reset_n: wcd-reset-n-active-state {
+		pins = "gpio150";
+		function = "gpio";
+		drive-strength = <16>;
+		bias-disable;
+	};
 };
 
 &lpass_vamacro {
@@ -101,8 +190,60 @@
 	qcom,dmic-sample-rate = <4800000>;
 };
 
+&lpass_rxmacro {
+	status = "okay";
+};
+
+&lpass_txmacro {
+	status = "okay";
+};
+
 &lpass_wsamacro {
 	status = "okay";
+};
+
+&swr1 {
+	status = "okay";
+
+	pinctrl-0 = <&rx_swr_active>;
+	pinctrl-names = "default";
+
+	/* WCD9378 RX SoundWire slave */
+	wcd9378_rx: codec@0,4 {
+		compatible = "sdw20217011000";
+		reg = <0 4>;
+
+		/*
+		 * WCD9378 RX Port 1 (HPH_L/R)  <=> SWR1 Port 1
+		 * WCD9378 RX Port 2 (CLSH)     <=> SWR1 Port 2
+		 * WCD9378 RX Port 3 (COMP_L/R) <=> SWR1 Port 3
+		 * WCD9378 RX Port 4 (LO)       <=> SWR1 Port 4
+		 * WCD9378 RX Port 5 (DSD_L/R)  <=> SWR1 Port 5
+		 */
+		qcom,rx-port-mapping = <1 2 3 4 5>;
+	};
+};
+
+&swr2 {
+	status = "okay";
+
+	pinctrl-0 = <&tx_swr_active>;
+	pinctrl-names = "default";
+
+	/* WCD9378 TX SoundWire slave */
+	wcd9378_tx: codec@0,3 {
+		compatible = "sdw20217011000";
+		reg = <0 3>;
+
+		/*
+		 * WCD9378 TX Port 1 (ADC1,2,3,4)   <=> SWR2 Port 1
+		 * WCD9378 TX Port 2 (DMIC0,1,2,3)  <=> SWR2 Port 2
+		 * WCD9378 TX Port 3 (DMIC4,5,6,7)  <=> SWR2 Port 3
+		 * WCD9378 TX Port 4 (MBHC)         <=> SWR2 Port 4
+		 * WCD9378 TX Port 5 (DMIC8)        <=> SWR2 Port 5
+		 */
+		qcom,tx-port-mapping = <1 2 3 4 5>;
+	};
 };
 
 &swr0 {
@@ -166,5 +307,43 @@
 		gpios = <7 GPIO_ACTIVE_HIGH>;
 		output-high;
 		line-name = "dmic-eldo-en";
+	};
+};
+
+&lpass_tlmm {
+	tx_swr_active: tx-swr-active-state {
+		clk-pins {
+			pins = "gpio0";
+			function = "swr_tx_clk";
+			drive-strength = <2>;
+			slew-rate = <1>;
+			bias-disable;
+		};
+
+		data-pins {
+			pins = "gpio1", "gpio2", "gpio14";
+			function = "swr_tx_data";
+			drive-strength = <2>;
+			slew-rate = <1>;
+			bias-bus-hold;
+		};
+	};
+
+	rx_swr_active: rx-swr-active-state {
+		clk-pins {
+			pins = "gpio3";
+			function = "swr_rx_clk";
+			drive-strength = <2>;
+			slew-rate = <1>;
+			bias-disable;
+		};
+
+		data-pins {
+			pins = "gpio4", "gpio5";
+			function = "swr_rx_data";
+			drive-strength = <2>;
+			slew-rate = <1>;
+			bias-bus-hold;
+		};
 	};
 };

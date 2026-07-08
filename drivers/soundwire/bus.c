@@ -1506,6 +1506,25 @@ static int sdw_handle_dp0_interrupt(struct sdw_slave *slave, u8 *slave_status)
 		return status;
 	}
 
+	/*
+	 * If only SDCA_CASCADE is set (no real DP0 interrupts), call the
+	 * slave's interrupt_callback to clear SDCA_INTSTAT. This handles
+	 * slaves with class_id=0 that have SDCA functions (e.g. WCD9378) —
+	 * the normal SDCA cascade path in sdw_handle_slave_alerts() is
+	 * skipped for class_id=0 slaves, so SDCA_INTSTAT never gets cleared,
+	 * keeping SDCA_CASCADE set permanently and causing MAX_RETRY loops.
+	 */
+	if ((status & SDW_DP0_SDCA_CASCADE) &&
+	    !(status & SDW_DP0_INTERRUPTS)) {
+		struct sdw_driver *drv = drv_to_sdw_driver(slave->dev.driver);
+		struct sdw_slave_intr_status intr = { .sdca_cascade = 1 };
+
+		mutex_lock(&slave->sdw_dev_lock);
+		if (slave->probed && drv->ops && drv->ops->interrupt_callback)
+			drv->ops->interrupt_callback(slave, &intr);
+		mutex_unlock(&slave->sdw_dev_lock);
+	}
+
 	do {
 		clear = status & ~(SDW_DP0_INTERRUPTS | SDW_DP0_SDCA_CASCADE);
 
@@ -1737,6 +1756,14 @@ static int sdw_handle_slave_alerts(struct sdw_slave *slave)
 			sdw_handle_port_interrupt(slave, bit,
 						  &port_status[bit]);
 		}
+		/*
+		 * Acknowledge port 0-3 bits in SCP_INT1 (RW1C) after handling.
+		 * If SDW_DP0_INT has only SDCA_CASCADE set (not clearable via
+		 * SDW_DP0_INT write), the PORT0 bit stays set and the outer
+		 * loop spins to MAX_RETRY. Writing PORT0 bits to SCP_INT1
+		 * clears the status bit, allowing the loop to exit cleanly.
+		 */
+		clear |= buf & SDW_SCP_INT1_PORT0_3;
 
 		/* Check if cascade 2 interrupt is present */
 		if (buf & SDW_SCP_INT1_SCP2_CASCADE) {

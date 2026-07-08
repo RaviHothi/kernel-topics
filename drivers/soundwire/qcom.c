@@ -976,6 +976,19 @@ static enum sdw_command_response qcom_swrm_xfer_msg(struct sdw_bus *bus,
 	struct qcom_swrm_ctrl *ctrl = to_qcom_sdw(bus);
 	int ret, i, len;
 
+	if (msg->page) {
+		ret = qcom_swrm_cmd_fifo_wr_cmd(ctrl, msg->addr_page2,
+						msg->dev_num,
+						SDW_SCP_ADDRPAGE2);
+		if (ret)
+			return SDW_CMD_IGNORED;
+		ret = qcom_swrm_cmd_fifo_wr_cmd(ctrl, msg->addr_page1,
+						msg->dev_num,
+						SDW_SCP_ADDRPAGE1);
+		if (ret)
+			return SDW_CMD_IGNORED;
+	}
+
 	if (msg->flags == SDW_MSG_FLAG_READ) {
 		for (i = 0; i < msg->len;) {
 			len = min(msg->len - i, QCOM_SWRM_MAX_RD_LEN);
@@ -1621,6 +1634,16 @@ static int qcom_swrm_probe(struct platform_device *pdev)
 	prop->clk_freq = &qcom_swrm_freq_tbl[0];
 	prop->default_col = data->default_cols;
 	prop->default_row = data->default_rows;
+	/*
+	 * The audio_cgcr reset in qcom_swrm_init() causes a brief SWR bus
+	 * glitch. Slaves detect this as a bus clash and set SDW_SCP_INT1
+	 * BUS_CLASH before sdw_initialize_slave() enables the interrupt mask.
+	 * Without clearing it first, the slave immediately enters ALERT state
+	 * after initialization and keeps asserting SLAVE_PEND_IRQ.
+	 * Setting this quirk makes sdw_initialize_slave() clear the pending
+	 * bus clash interrupt before enabling SCP_INTMASK1.
+	 */
+	prop->quirks = SDW_MASTER_QUIRKS_CLEAR_INITIAL_CLASH;
 
 	ctrl->reg_read(ctrl, SWRM_COMP_HW_VERSION, &ctrl->version);
 
@@ -1637,9 +1660,9 @@ static int qcom_swrm_probe(struct platform_device *pdev)
 	ctrl->wake_irq = of_irq_get(dev->of_node, 1);
 	if (ctrl->wake_irq > 0) {
 		ret = devm_request_threaded_irq(dev, ctrl->wake_irq, NULL,
-						qcom_swrm_wake_irq_handler,
-						IRQF_TRIGGER_HIGH | IRQF_ONESHOT,
-						"swr_wake_irq", ctrl);
+					       qcom_swrm_wake_irq_handler,
+					       IRQF_TRIGGER_HIGH | IRQF_ONESHOT,
+					       "swr_wake_irq", ctrl);
 		if (ret) {
 			dev_err(dev, "Failed to request soundwire wake irq\n");
 			goto err_init;
@@ -1661,6 +1684,7 @@ static int qcom_swrm_probe(struct platform_device *pdev)
 	}
 
 	qcom_swrm_init(ctrl);
+
 	wait_for_completion_timeout(&ctrl->enumeration,
 				    msecs_to_jiffies(TIMEOUT_MS));
 	ret = qcom_swrm_register_dais(ctrl);

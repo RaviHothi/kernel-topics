@@ -807,7 +807,7 @@ ifdef CONFIG_SND_SOC_WCD937X_SDW
 obj-$(CONFIG_SND_SOC_WCD937X) += snd-soc-wcd937x-sdw.o
 endif
 obj-$(CONFIG_SND_SOC_WCD9378)	+= snd-soc-wcd9378.o
-ifdef CONFIG_SND_SOC_WCD9378
+ifdef CONFIG_SND_SOC_WCD9378_SDW
 # avoid link failure by forcing sdw code built-in when needed
 obj-$(CONFIG_SND_SOC_WCD9378) += snd-soc-wcd9378-sdw.o
 endif

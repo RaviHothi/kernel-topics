@@ -13,6 +13,7 @@
 #include <linux/regmap.h>
 #include <linux/regulator/consumer.h>
 #include <linux/slab.h>
+#include <linux/soundwire/sdw_registers.h>
 #include <sound/jack.h>
 #include <sound/pcm_params.h>
 #include <sound/pcm.h>
@@ -42,6 +43,7 @@
 #define WCD9378_MBHC_MOISTURE_RREF	R_24_KOHM
 #define WCD_MBHC_HS_V_MAX		1600
 #define WCD9378_MBHC_MAX_BUTTONS	8
+#define WCD9378_SDW_COMMIT_VALUE	0x02
 
 #define WCD9378_RATES (SNDRV_PCM_RATE_8000 | SNDRV_PCM_RATE_16000 |\
 		       SNDRV_PCM_RATE_32000 | SNDRV_PCM_RATE_48000 |\
@@ -60,6 +62,7 @@ enum {
 	HPH_COMP_DELAY,
 	HPH_PA_DELAY,
 	AMIC2_BCS_ENABLE,
+	HPH_SEQ_TX_PM,
 };
 
 enum {
@@ -291,8 +294,31 @@ static void wcd9378_reset(struct wcd9378_priv *wcd9378)
 	usleep_range(20, 30);
 }
 
+static void wcd9378_class_load(struct regmap *regmap)
+{
+	/* SMP_AMP class loading */
+	regmap_update_bits(regmap, WCD9378_FUNC_ACT, 0x01, 0x01);
+	usleep_range(20000, 20010);
+	regmap_update_bits(regmap, WCD9378_SMP_AMP_FUNC_STAT, 0xFF, 0xFF);
+
+	/* SMP_JACK class loading */
+	regmap_update_bits(regmap, WCD9378_SMP_JACK_FUNC_ACT, 0x01, 0x01);
+	usleep_range(30000, 30010);
+	regmap_update_bits(regmap, WCD9378_CMT_GRP_MASK_REG, 0x02, 0x02);
+	regmap_update_bits(regmap, WCD9378_SMP_JACK_FUNC_STAT, 0xFF, 0xFF);
+}
+
 static void wcd9378_io_init(struct regmap *regmap)
 {
+	/*
+	 * Ensure the chip is not in software reset state.
+	 * CDC_RST_CTL bits: ANA_SW_RST_N (bit1) and DIG_SW_RST_N (bit0)
+	 * Both must be 1 (active-low reset, so 1 = not in reset).
+	 * Hardware reset value may be 0x00 (both in reset), which would
+	 * prevent the SWR interface from functioning correctly.
+	 */
+	regmap_write(regmap, WCD9378_CDC_RST_CTL, WCD9378_CDC_RST_CTL_NO_RESET);
+
 	/*
 	 * WCD9378 uses a hardware-driven power sequencer.
 	 * Software enables bandgap and bias only; the HW sequencer
@@ -310,7 +336,16 @@ static void wcd9378_io_init(struct regmap *regmap)
 	usleep_range(10000, 10010);
 	regmap_update_bits(regmap, WCD9378_ANA_BIAS, BIT(6), 0x00);
 
-	regmap_update_bits(regmap, WCD9378_HPH_SURGE_HPHLR_SURGE_EN, 0xff, 0xd9);
+	/* TX analog clock enable (ANA_TXSCBIAS_CLK_EN) */
+	regmap_update_bits(regmap, WCD9378_CDC_ANA_TX_CLK_CTL, 0x01, 0x01);
+
+	/* TX frontend sequencer bypass */
+	regmap_update_bits(regmap, WCD9378_TX_COM_TXFE_DIV_CTL, 0x80, 0x80);
+
+	/* PDM watchdog timeout: 160 cycles */
+	regmap_update_bits(regmap, WCD9378_PDM_WD_CTL0, 0x10, 0x10);
+	regmap_update_bits(regmap, WCD9378_PDM_WD_CTL1, 0x10, 0x10);
+
 	regmap_update_bits(regmap, WCD9378_MICB1_TEST_CTL_1, 0xff, 0xfa);
 	regmap_update_bits(regmap, WCD9378_MICB2_TEST_CTL_1, 0xff, 0xfa);
 	regmap_update_bits(regmap, WCD9378_MICB3_TEST_CTL_1, 0xff, 0xfa);
@@ -326,6 +361,255 @@ static void wcd9378_io_init(struct regmap *regmap)
 
 	/* Class-G CP: disable TWAIT */
 	regmap_update_bits(regmap, WCD9378_CP_CP_DTOP_CTRL_9, 0x08, 0x08);
+
+	/*
+	 * Restore RDAC clock control registers to their default values.
+	 * HPH power sequencer timing and state machine micbias selection.
+	 */
+	regmap_update_bits(regmap, WCD9378_HPH_UP_T0, 0xff, 0x05);
+	regmap_update_bits(regmap, WCD9378_HPH_UP_T9, 0xff, 0x05);
+	regmap_update_bits(regmap, WCD9378_HPH_DN_T0, 0xff, 0x06);
+	regmap_update_bits(regmap, WCD9378_SM0_MB_SEL, 0xff, 0x01);
+	regmap_update_bits(regmap, WCD9378_SM1_MB_SEL, 0xff, 0x02);
+	regmap_update_bits(regmap, WCD9378_SM2_MB_SEL, 0xff, 0x03);
+	regmap_update_bits(regmap, WCD9378_SYS_USAGE_CTRL, 0x0f, 0x00);
+
+	/*
+	 * Set mobile mode (0x01): hardware uses RX SWR clock for valid-config
+	 * detection. Without this, hardware defaults to compute mode and checks
+	 * TX SWR clock, causing HPH_FUNC_FAULTY and blocking the sequencer.
+	 */
+	regmap_write(regmap, WCD9378_PLATFORM_CTL, WCD9378_PLATFORM_CTL_MOBILE);
+
+	/*
+	 * Disable SWR slave auto-reset on sync loss (SWR_RST_EN = 0x00).
+	 *
+	 * The hardware default is 0x1f which enables auto-reset for both RX
+	 * and TX slaves on: sync loss, SWR bus reset, and SWR register reset.
+	 * When the LPASS audio subsystem starts up, a brief SWR sync loss
+	 * occurs. With the default 0x1f, this causes BOTH RX and TX slaves to
+	 * reset themselves and drop off the bus simultaneously (observed as
+	 * mcp_slv=0x0 while link_sts=0x2081 - clock still running).
+	 *
+	 * Setting SWR_RST_EN=0x00 prevents the slaves from auto-resetting on
+	 * sync loss. The slaves will stay attached and re-sync automatically
+	 * after the brief glitch, eliminating the need for a chip reset on
+	 * every playback start.
+	 *
+	 * LA downstream uses 0x1f but doesn't have this issue because the LA
+	 * SWR framework doesn't trigger the LPASS sync loss event.
+	 */
+	regmap_write(regmap, WCD9378_SWR_RST_EN, 0x00);
+
+	/*
+	 * Set SWR TX clock rate register for both banks to 9.6MHz (val=0).
+	 * The hardware valid-config detection circuit reads this register to
+	 * determine if the SWR clock rate is valid for the HPH sequencer.
+	 * After a chip reset this register reverts to its hardware default;
+	 * without an explicit write the sequencer fires HPH_FUNC_FAULTY.
+	 * Encoding: nibble[3:0]=bank0, nibble[7:4]=bank1; 0=9.6MHz.
+	 */
+	regmap_write(regmap, WCD9378_SWR_TX_CLK_RATE, 0x00);
+
+	/*
+	 * Override HPH sequencer enable and valid-config signals.
+	 * Required in the upstream SWR framework — the valid-config
+	 * detection circuit fires HPH_FUNC_FAULTY without these.
+	 * Root cause under investigation (LA does not need them).
+	 */
+	regmap_update_bits(regmap, WCD9378_SEQ_OVRRIDE_CTL0, 0x01, 0x01);
+	regmap_update_bits(regmap, WCD9378_SEQ_OVRRIDE_CTL2, 0x04, 0x04);
+	regmap_update_bits(regmap, WCD9378_BYP_EN_CTL2, WCD9378_HPH_VALID_CFG_BYP_EN,
+			   WCD9378_HPH_VALID_CFG_BYP_EN);
+
+	/*
+	 * After a chip reset, WCD9378_HPH_RDAC_CLK_CTL1 bit7 is cleared
+	 * (RDAC clock disabled), which silences the HPH output even though
+	 * the HPH PA is powered on. Explicitly restore the defaults here.
+	 */
+	regmap_write(regmap, WCD9378_HPH_RDAC_CLK_CTL1, 0x99);
+	regmap_write(regmap, WCD9378_HPH_RDAC_CLK_CTL2, 0x9b);
+
+	/* Load HPH control classes (SMP_AMP + SMP_JACK). */
+	wcd9378_class_load(regmap);
+
+	/* Mute HPH channels initially */
+	regmap_write(regmap, WCD9378_FU42_MUTE_CH1_CN, 0x01);
+	regmap_write(regmap, WCD9378_FU42_MUTE_CH2_CN, 0x01);
+
+	/*
+	 * Mask HPHL/R surge detection interrupts (SDCA_INTMASK_3 bits 2,3).
+	 * These fire when HPH surge protection is enabled with no HPH load,
+	 * setting SDCA_CASCADE in SDW_DP0_INT → continuous ALERT loop.
+	 * Unmask when MBHC is re-enabled and surge detection is handled.
+	 */
+	regmap_write(regmap, SWRS_SCP_SDCA_INTMASK_3, 0x0c);
+
+	/*
+	 * Mask all MBHC SDCA interrupts (SDCA_INTMASK_1 = 0xff) while MBHC
+	 * is disabled. Without this, MBHC events fire sub-IRQs that have no
+	 * handler registered, causing 'irq: nobody cared' warnings and the
+	 * kernel disabling the IRQ. Unmask when MBHC is re-enabled.
+	 */
+	regmap_write(regmap, SWRS_SCP_SDCA_INTMASK_1, 0xff);
+}
+
+static u8 wcd9378_get_hph_pwr_level(int hph_mode)
+{
+	switch (hph_mode) {
+	case CLS_H_LOHIFI:
+	case CLS_AB_LOHIFI:
+		return 0x00;
+	case CLS_H_LP:
+	case CLS_AB_LP:
+		return 0x01;
+	case CLS_H_HIFI:
+	case CLS_AB_HIFI:
+		return 0x02;
+	case CLS_H_ULP:
+	case CLS_AB:
+	case CLS_H_NORMAL:
+	default:
+		return 0x03;
+	}
+}
+
+static int wcd9378_pde_act_ps_check(struct snd_soc_component *component,
+				    unsigned int reg, u8 expected_ps)
+{
+	int retries = 40;
+	unsigned int val = 0;
+
+	while (retries--) {
+		val = snd_soc_component_read(component, reg) & 0xff;
+		if (val == expected_ps)
+			return 0;
+
+		usleep_range(1000, 1100);
+	}
+
+	return -ETIMEDOUT;
+}
+
+static void wcd9378_sdw_commit(struct snd_soc_component *component,
+			       struct wcd9378_priv *wcd9378)
+{
+	struct sdw_slave *rx_sdw = NULL;
+	int ret;
+
+	if (wcd9378->rxdev)
+		rx_sdw = dev_to_sdw_dev(wcd9378->rxdev);
+
+	if (!wcd9378->tx_sdw_dev && !rx_sdw)
+		return;
+
+	if (wcd9378->tx_sdw_dev) {
+		ret = sdw_write(wcd9378->tx_sdw_dev, SDW_SCP_COMMIT,
+				WCD9378_SDW_COMMIT_VALUE);
+		if (ret < 0)
+			dev_err_ratelimited(component->dev,
+					    "SDW commit (tx) failed: %d\n", ret);
+	}
+
+	if (rx_sdw) {
+		ret = sdw_write(rx_sdw, SDW_SCP_COMMIT, WCD9378_SDW_COMMIT_VALUE);
+		if (ret < 0)
+			dev_err_ratelimited(component->dev,
+					    "SDW commit (rx) failed: %d\n", ret);
+	}
+}
+
+static int wcd9378_hph_sequencer_enable(struct snd_soc_dapm_widget *w,
+					struct snd_kcontrol *kcontrol,
+					int event)
+{
+	struct snd_soc_component *component = snd_soc_dapm_to_component(w->dapm);
+	struct wcd9378_priv *wcd9378 = snd_soc_component_get_drvdata(component);
+	int hph_mode = wcd9378->hph_mode;
+	int ret = 0;
+
+	switch (event) {
+	case SND_SOC_DAPM_PRE_PMU:
+
+		if (wcd9378->txdev) {
+			ret = pm_runtime_resume_and_get(wcd9378->txdev);
+			if (ret < 0)
+				dev_warn(component->dev,
+					 "txdev pm_get failed: %d\n", ret);
+			else
+				set_bit(HPH_SEQ_TX_PM, &wcd9378->status_mask);
+		}
+
+		snd_soc_component_write(component, WCD9378_CMT_GRP_MASK_REG, 0x02);
+		/*
+		 * SYS_USAGE_CTRL must be set to a value that has RX0_RX1_HPH_EN
+		 * (bit 12) set in the sys_usage[] table, otherwise the HPH
+		 * sequencer is disabled and PDE47 writes have no effect.
+		 * Index 1 (0x12a7) is the minimal HPH-only entry with
+		 * RX0_RX1_HPH_EN + TX1_FOR_JACK set.
+		 */
+		snd_soc_component_update_bits(component, WCD9378_SYS_USAGE_CTRL, 0x0f, WCD9378_SYS_USAGE_HPH_ONLY);
+
+		if (!wcd9378->comp1_enable || !wcd9378->comp2_enable) {
+			snd_soc_component_update_bits(component, WCD9378_HPH_UP_T7, 0x07, 0x07);
+			snd_soc_component_update_bits(component, WCD9378_HPH_DN_T1, 0x07, 0x07);
+		}
+
+		if (hph_mode == CLS_AB || hph_mode == CLS_AB_HIFI ||
+		    hph_mode == CLS_AB_LP || hph_mode == CLS_AB_LOHIFI)
+			snd_soc_component_update_bits(component, WCD9378_CP_CP_DTOP_CTRL_14,
+						      BIT(7), BIT(7));
+
+		snd_soc_component_update_bits(component, WCD9378_IT41_USAGE, 0x03,
+					      wcd9378_get_hph_pwr_level(hph_mode));
+
+
+
+
+		snd_soc_component_update_bits(component, WCD9378_PDE47_REQ_PS, 0xff,
+					      WCD9378_PDE_PS0);
+
+
+		if (!wcd9378->comp1_enable || !wcd9378->comp2_enable)
+			usleep_range(26000, 26100);
+		else
+			usleep_range(15000, 15100);
+
+		snd_soc_component_write(component, WCD9378_FU42_MUTE_CH1_CN, 0x00);
+		snd_soc_component_write(component, WCD9378_FU42_MUTE_CH2_CN, 0x00);
+		wcd9378_sdw_commit(component, wcd9378);
+
+		ret = wcd9378_pde_act_ps_check(component, WCD9378_PDE47_ACT_PS,
+					       WCD9378_PDE_PS0);
+		break;
+	case SND_SOC_DAPM_POST_PMD:
+		snd_soc_component_update_bits(component, WCD9378_PDE47_REQ_PS, 0xff,
+					      WCD9378_PDE_PS3);
+
+		if (!wcd9378->comp1_enable || !wcd9378->comp2_enable)
+			usleep_range(30000, 30100);
+		else
+			usleep_range(17000, 17100);
+
+		ret = wcd9378_pde_act_ps_check(component, WCD9378_PDE47_ACT_PS,
+					       WCD9378_PDE_PS3);
+		snd_soc_component_write(component, WCD9378_FU42_MUTE_CH1_CN, 0x01);
+		snd_soc_component_write(component, WCD9378_FU42_MUTE_CH2_CN, 0x01);
+		wcd9378_sdw_commit(component, wcd9378);
+		snd_soc_component_update_bits(component, WCD9378_SYS_USAGE_CTRL, 0x0f, 0x00);
+
+
+		if (wcd9378->txdev &&
+		    test_bit(HPH_SEQ_TX_PM, &wcd9378->status_mask)) {
+			pm_runtime_put_autosuspend(wcd9378->txdev);
+			clear_bit(HPH_SEQ_TX_PM, &wcd9378->status_mask);
+		}
+		break;
+	default:
+		break;
+	}
+
+	return ret;
 }
 
 /* ------------------------------------------------------------------ */
@@ -446,14 +730,23 @@ static int wcd9378_codec_hphl_dac_event(struct snd_soc_dapm_widget *w,
 	struct snd_soc_component *component = snd_soc_dapm_to_component(w->dapm);
 	struct wcd9378_priv *wcd9378 = snd_soc_component_get_drvdata(component);
 	int hph_mode = wcd9378->hph_mode;
+	int ret;
 
 	switch (event) {
 	case SND_SOC_DAPM_PRE_PMU:
+		if (wcd9378->txdev) {
+			ret = pm_runtime_resume_and_get(wcd9378->txdev);
+		}
 		wcd9378_rx_clk_enable(component);
 		snd_soc_component_update_bits(component,
 					      WCD9378_HPH_RDAC_CLK_CTL1,
 					      BIT(7), 0x00);
 		set_bit(HPH_COMP_DELAY, &wcd9378->status_mask);
+		/* Enable HPHL RX digital path */
+		snd_soc_component_update_bits(component,
+					      WCD9378_CDC_HPH_GAIN_CTL,
+					      WCD9378_CDC_HPH_GAIN_CTL_HPHL_RX_EN,
+					      WCD9378_CDC_HPH_GAIN_CTL_HPHL_RX_EN);
 		break;
 	case SND_SOC_DAPM_POST_PMU:
 		if (hph_mode == CLS_AB_HIFI || hph_mode == CLS_H_HIFI)
@@ -478,6 +771,11 @@ static int wcd9378_codec_hphl_dac_event(struct snd_soc_dapm_widget *w,
 		snd_soc_component_update_bits(component,
 					      WCD9378_HPH_NEW_INT_RDAC_HD2_CTL_L,
 					      0x0f, BIT(0));
+		snd_soc_component_update_bits(component,
+					      WCD9378_CDC_HPH_GAIN_CTL,
+					      WCD9378_CDC_HPH_GAIN_CTL_HPHL_RX_EN, 0);
+		if (wcd9378->txdev)
+			pm_runtime_put_autosuspend(wcd9378->txdev);
 		break;
 	}
 
@@ -499,6 +797,11 @@ static int wcd9378_codec_hphr_dac_event(struct snd_soc_dapm_widget *w,
 					      WCD9378_HPH_RDAC_CLK_CTL1,
 					      BIT(7), 0x00);
 		set_bit(HPH_COMP_DELAY, &wcd9378->status_mask);
+		/* Enable HPHR RX digital path */
+		snd_soc_component_update_bits(component,
+					      WCD9378_CDC_HPH_GAIN_CTL,
+					      WCD9378_CDC_HPH_GAIN_CTL_HPHR_RX_EN,
+					      WCD9378_CDC_HPH_GAIN_CTL_HPHR_RX_EN);
 		break;
 	case SND_SOC_DAPM_POST_PMU:
 		if (hph_mode == CLS_AB_HIFI || hph_mode == CLS_H_HIFI)
@@ -523,6 +826,9 @@ static int wcd9378_codec_hphr_dac_event(struct snd_soc_dapm_widget *w,
 		snd_soc_component_update_bits(component,
 					      WCD9378_HPH_NEW_INT_RDAC_HD2_CTL_R,
 					      0x0f, BIT(0));
+		snd_soc_component_update_bits(component,
+					      WCD9378_CDC_HPH_GAIN_CTL,
+					      WCD9378_CDC_HPH_GAIN_CTL_HPHR_RX_EN, 0);
 		break;
 	}
 
@@ -605,6 +911,8 @@ static int wcd9378_codec_enable_hphr_pa(struct snd_soc_dapm_widget *w,
 
 	switch (event) {
 	case SND_SOC_DAPM_PRE_PMU:
+		/* Wake TX slave so its regmap is not in cache-only mode */
+			pm_runtime_get_sync(wcd9378->txdev);
 		wcd_clsh_ctrl_set_state(wcd9378->clsh_info,
 					WCD_CLSH_EVENT_PRE_DAC,
 					WCD_CLSH_STATE_HPHR,
@@ -657,6 +965,7 @@ static int wcd9378_codec_enable_hphr_pa(struct snd_soc_dapm_widget *w,
 					WCD_CLSH_EVENT_POST_PA,
 					WCD_CLSH_STATE_HPHR,
 					hph_mode);
+		pm_runtime_put_autosuspend(wcd9378->txdev);
 		break;
 	}
 
@@ -673,7 +982,9 @@ static int wcd9378_codec_enable_hphl_pa(struct snd_soc_dapm_widget *w,
 
 	switch (event) {
 	case SND_SOC_DAPM_PRE_PMU:
-		wcd_clsh_ctrl_set_state(wcd9378->clsh_info,
+		/* Wake TX slave so its regmap is not in cache-only mode */
+			pm_runtime_get_sync(wcd9378->txdev);
+			wcd_clsh_ctrl_set_state(wcd9378->clsh_info,
 					WCD_CLSH_EVENT_PRE_DAC,
 					WCD_CLSH_STATE_HPHL,
 					hph_mode);
@@ -725,6 +1036,7 @@ static int wcd9378_codec_enable_hphl_pa(struct snd_soc_dapm_widget *w,
 					WCD_CLSH_EVENT_POST_PA,
 					WCD_CLSH_STATE_HPHL,
 					hph_mode);
+		pm_runtime_put_autosuspend(wcd9378->txdev);
 		break;
 	}
 
@@ -836,6 +1148,7 @@ static int wcd9378_tx_swr_ctrl(struct snd_soc_dapm_widget *w,
 	    strnstr(w->name, "ADC", sizeof("ADC")))
 		set_bit(AMIC2_BCS_ENABLE, &wcd9378->status_mask);
 
+
 	return 0;
 }
 
@@ -847,11 +1160,13 @@ static int wcd9378_codec_enable_adc(struct snd_soc_dapm_widget *w,
 	switch (event) {
 	case SND_SOC_DAPM_PRE_PMU:
 		snd_soc_component_update_bits(component,
-					      WCD9378_ANA_TX_CH1, BIT(7), BIT(7));
+					      WCD9378_ANA_TX_CH1 + w->shift,
+					      BIT(7), BIT(7));
 		break;
 	case SND_SOC_DAPM_POST_PMD:
 		snd_soc_component_update_bits(component,
-					      WCD9378_ANA_TX_CH1, BIT(7), 0x00);
+					      WCD9378_ANA_TX_CH1 + w->shift,
+					      BIT(7), 0x00);
 		break;
 	}
 
@@ -1379,6 +1694,14 @@ right_ch_impedance:
 	/* Re-enable surge protection after impedance detection */
 	regmap_update_bits(wcd9378->regmap,
 			   WCD9378_HPH_SURGE_HPHLR_SURGE_EN, 0xC0, 0xC0);
+	/*
+	 * MBHC bringup: immediately clear surge detection interrupt that fires
+	 * when surge protection is re-enabled with no HPH load connected.
+	 * This prevents SDCA_CASCADE in SDW_DP0_INT → SLAVE_PEND_IRQ ALERT loop.
+	 */
+	regmap_write(wcd9378->regmap, SWRS_SCP_SDCA_INTSTAT_1, 0xff);
+	regmap_write(wcd9378->regmap, SWRS_SCP_SDCA_INTSTAT_2, 0xff);
+	regmap_write(wcd9378->regmap, SWRS_SCP_SDCA_INTSTAT_3, 0xff);
 zdet_complete:
 	snd_soc_component_write(component, WCD9378_ANA_MBHC_BTN5, reg0);
 	snd_soc_component_write(component, WCD9378_ANA_MBHC_BTN6, reg1);
@@ -1613,6 +1936,9 @@ static void wcd9378_mbhc_deinit(struct snd_soc_component *component)
 {
 	struct wcd9378_priv *wcd9378 = snd_soc_component_get_drvdata(component);
 
+	if (!wcd9378->wcd_mbhc)
+		return;
+
 	wcd_mbhc_deinit(wcd9378->wcd_mbhc);
 }
 
@@ -1816,6 +2142,9 @@ static const struct snd_soc_dapm_widget wcd9378_dapm_widgets[] = {
 			   wcd9378_codec_hphr_dac_event,
 			   SND_SOC_DAPM_PRE_PMU | SND_SOC_DAPM_POST_PMU |
 			   SND_SOC_DAPM_PRE_PMD | SND_SOC_DAPM_POST_PMD),
+	SND_SOC_DAPM_MIXER_E("HPH SEQUENCER", SND_SOC_NOPM, 0, 0, NULL, 0,
+			     wcd9378_hph_sequencer_enable,
+			     SND_SOC_DAPM_PRE_PMU | SND_SOC_DAPM_POST_PMD),
 	SND_SOC_DAPM_DAC_E("RDAC3", NULL, SND_SOC_NOPM, 0, 0,
 			   wcd9378_codec_ear_dac_event,
 			   SND_SOC_DAPM_PRE_PMU | SND_SOC_DAPM_POST_PMU |
@@ -2022,6 +2351,32 @@ static int wcd9378_get_swr_port(struct snd_kcontrol *kcontrol,
 	return 0;
 }
 
+static void wcd9378_connect_port(struct wcd9378_sdw_priv *wcd,
+				 u8 ch_idx, bool enable)
+{
+	const struct wcd_sdw_ch_info *ch_info = &wcd->ch_info[ch_idx];
+	struct sdw_port_config *port_config;
+	u8 port_num = ch_info->port_num;
+	u8 ch_mask = ch_info->ch_mask;
+	u8 mstr_port_num;
+
+	if (port_num == 0 || port_num > WCD9378_MAX_SWR_PORTS)
+		return;
+
+	port_config = &wcd->port_config[port_num - 1];
+	port_config->num = port_num;
+
+	mstr_port_num = wcd->sdev->m_port_map[port_num];
+
+	if (enable) {
+		port_config->ch_mask |= ch_mask;
+		wcd->master_channel_map[mstr_port_num] |= ch_info->master_ch_mask;
+	} else {
+		port_config->ch_mask &= ~ch_mask;
+		wcd->master_channel_map[mstr_port_num] &= ~ch_info->master_ch_mask;
+	}
+}
+
 static int wcd9378_set_swr_port(struct snd_kcontrol *kcontrol,
 				struct snd_ctl_elem_value *ucontrol)
 {
@@ -2032,13 +2387,16 @@ static int wcd9378_set_swr_port(struct snd_kcontrol *kcontrol,
 		(struct soc_mixer_control *)kcontrol->private_value;
 	int dai_id = mixer->shift;
 	int ch_idx = mixer->reg;
+	bool enable = ucontrol->value.integer.value[0];
 
 	wcd = wcd9378->sdw_priv[dai_id];
-	if (ucontrol->value.integer.value[0])
+	if (enable)
 		wcd->ch_info[ch_idx].master_ch_mask =
 			WCD9378_SWRM_CH_MASK(ch_idx + 1);
 	else
 		wcd->ch_info[ch_idx].master_ch_mask = 0;
+
+	wcd9378_connect_port(wcd, ch_idx, enable);
 
 	return 0;
 }
@@ -2080,6 +2438,36 @@ static const struct soc_enum rx_hph_mode_mux_enum =
 	SOC_ENUM_SINGLE_EXT(ARRAY_SIZE(rx_hph_mode_mux_text),
 			    rx_hph_mode_mux_text);
 
+static int wcd9378_get_compander(struct snd_kcontrol *kcontrol,
+				 struct snd_ctl_elem_value *ucontrol)
+{
+	struct snd_soc_component *component = snd_kcontrol_chip(kcontrol);
+	struct wcd9378_priv *wcd9378 = snd_soc_component_get_drvdata(component);
+	struct soc_mixer_control *mc =
+		(struct soc_mixer_control *)(kcontrol->private_value);
+
+	ucontrol->value.integer.value[0] = mc->shift ? wcd9378->comp2_enable :
+						   wcd9378->comp1_enable;
+	return 0;
+}
+
+static int wcd9378_set_compander(struct snd_kcontrol *kcontrol,
+				 struct snd_ctl_elem_value *ucontrol)
+{
+	struct snd_soc_component *component = snd_kcontrol_chip(kcontrol);
+	struct wcd9378_priv *wcd9378 = snd_soc_component_get_drvdata(component);
+	struct soc_mixer_control *mc =
+		(struct soc_mixer_control *)(kcontrol->private_value);
+	int value = ucontrol->value.integer.value[0];
+
+	if (mc->shift)
+		wcd9378->comp2_enable = value;
+	else
+		wcd9378->comp1_enable = value;
+
+	return 0;
+}
+
 static const struct snd_kcontrol_new wcd9378_snd_controls[] = {
 	SOC_SINGLE_TLV("EAR_PA Volume", WCD9378_ANA_EAR_COMPANDER_CTL,
 		       2, 0x10, 0, ear_pa_gain),
@@ -2097,6 +2485,10 @@ static const struct snd_kcontrol_new wcd9378_snd_controls[] = {
 		       wcd9378_get_swr_port, wcd9378_set_swr_port),
 	SOC_SINGLE_EXT("HPHR Switch", WCD9378_HPH_R, 0, 1, 0,
 		       wcd9378_get_swr_port, wcd9378_set_swr_port),
+	SOC_SINGLE_EXT("HPHL_COMP Switch", WCD9378_COMP_L, 0, 1, 0,
+		       wcd9378_get_compander, wcd9378_set_compander),
+	SOC_SINGLE_EXT("HPHR_COMP Switch", WCD9378_COMP_R, 1, 1, 0,
+		       wcd9378_get_compander, wcd9378_set_compander),
 	SOC_SINGLE_EXT("LO Switch", WCD9378_LO, 0, 1, 0,
 		       wcd9378_get_swr_port, wcd9378_set_swr_port),
 	SOC_SINGLE_EXT("CLSH PA Switch", WCD9378_CLSH, 0, 1, 0,
@@ -2184,7 +2576,8 @@ static const struct snd_soc_dapm_route wcd9378_audio_map[] = {
 	{ "IN1_HPHL", NULL, "VDD_BUCK" },
 	{ "IN1_HPHL", NULL, "CLS_H_PORT" },
 	{ "RX1", NULL, "IN1_HPHL" },
-	{ "RDAC1", NULL, "RX1" },
+	{ "HPH SEQUENCER", NULL, "RX1" },
+	{ "RDAC1", NULL, "HPH SEQUENCER" },
 	{ "HPHL_RDAC", "Switch", "RDAC1" },
 	{ "HPHL PGA", NULL, "HPHL_RDAC" },
 	{ "HPHL", NULL, "HPHL PGA" },
@@ -2193,7 +2586,8 @@ static const struct snd_soc_dapm_route wcd9378_audio_map[] = {
 	{ "IN2_HPHR", NULL, "VDD_BUCK" },
 	{ "IN2_HPHR", NULL, "CLS_H_PORT" },
 	{ "RX2", NULL, "IN2_HPHR" },
-	{ "RDAC2", NULL, "RX2" },
+	{ "HPH SEQUENCER", NULL, "RX2" },
+	{ "RDAC2", NULL, "HPH SEQUENCER" },
 	{ "HPHR_RDAC", "Switch", "RDAC2" },
 	{ "HPHR PGA", NULL, "HPHR_RDAC" },
 	{ "HPHR", NULL, "HPHR PGA" },
@@ -2236,13 +2630,16 @@ static int wcd9378_soc_codec_probe(struct snd_soc_component *component)
 	unsigned long time_left;
 	int ret;
 
+	dev_err(dev, "WCD-DBG codec_probe: START waiting for TX init_complete\n");
 	time_left = wait_for_completion_timeout(
 			&tx_sdw_dev->initialization_complete,
-			msecs_to_jiffies(5000));
+			msecs_to_jiffies(15000));
 	if (!time_left) {
 		dev_err(dev, "soundwire device init timeout\n");
-		return -ETIMEDOUT;
+			return -ETIMEDOUT;
 	}
+	dev_err(dev, "WCD-DBG codec_probe: TX init_complete received time_left=%lu\n",
+		time_left);
 
 	snd_soc_component_init_regmap(component, wcd9378->regmap);
 
@@ -2250,7 +2647,7 @@ static int wcd9378_soc_codec_probe(struct snd_soc_component *component)
 	if (ret < 0)
 		return ret;
 
-	wcd9378->clsh_info = wcd_clsh_ctrl_alloc(component, WCD937X);
+	wcd9378->clsh_info = wcd_clsh_ctrl_alloc(component, WCD9378);
 	if (IS_ERR(wcd9378->clsh_info)) {
 		pm_runtime_put(dev);
 		return PTR_ERR(wcd9378->clsh_info);
@@ -2309,11 +2706,13 @@ static int wcd9378_soc_codec_probe(struct snd_soc_component *component)
 
 	snd_soc_dapm_sync(dapm);
 
-	ret = wcd9378_mbhc_init(component);
-	if (ret)
-		dev_err(dev, "mbhc initialization failed\n");
-
-	return ret;
+	/*
+	 * MBHC disabled for initial bringup.
+	 * Re-enable: call wcd9378_mbhc_init(component) here.
+	 * See context file section 63 for details on the
+	 * SDCA_CASCADE / surge detection issue to fix first.
+	 */
+	return 0;
 }
 
 static void wcd9378_soc_codec_remove(struct snd_soc_component *component)
@@ -2332,6 +2731,9 @@ static int wcd9378_codec_set_jack(struct snd_soc_component *comp,
 {
 	struct wcd9378_priv *wcd9378 = dev_get_drvdata(comp->dev);
 	int ret = 0;
+
+	if (!wcd9378->wcd_mbhc)
+		return 0;
 
 	if (jack)
 		ret = wcd_mbhc_start(wcd9378->wcd_mbhc,
@@ -2487,6 +2889,7 @@ static int wcd9378_bind(struct device *dev)
 
 	wcd9378->sdw_priv[AIF1_PB] = dev_get_drvdata(wcd9378->rxdev);
 	wcd9378->sdw_priv[AIF1_PB]->wcd9378 = wcd9378;
+	wcd9378->sdw_priv[AIF1_PB]->codec_dev = dev;
 
 	wcd9378->txdev = of_sdw_find_device_by_node(wcd9378->txnode);
 	if (!wcd9378->txdev) {
@@ -2498,6 +2901,7 @@ static int wcd9378_bind(struct device *dev)
 	wcd9378->sdw_priv[AIF1_CAP] = dev_get_drvdata(wcd9378->txdev);
 	wcd9378->sdw_priv[AIF1_CAP]->wcd9378 = wcd9378;
 	wcd9378->tx_sdw_dev = dev_to_sdw_dev(wcd9378->txdev);
+	wcd9378->sdw_priv[AIF1_CAP]->codec_dev = dev;
 
 	/*
 	 * TX is the main CSR register interface and must not be suspended
@@ -2671,7 +3075,16 @@ static int wcd9378_probe(struct platform_device *pdev)
 	if (ret)
 		return ret;
 
+	/*
+	 * Reset the codec before registering the component master.
+	 * The SWR master's qcom_swrm_init() resets the SWR hardware,
+	 * which causes the codec slave to see a new SWR clock and
+	 * enumerate. The probe poll loop in qcom_swrm_probe() detects
+	 * this and signals slave->initialization_complete.
+	 */
 	wcd9378_reset(wcd9378);
+	usleep_range(5000, 5010);
+
 
 	ret = component_master_add_with_match(dev, &wcd9378_comp_ops, match);
 	if (ret)

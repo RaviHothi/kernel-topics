@@ -223,7 +223,7 @@ struct wcd_mbhc_intr {
 };
 
 struct wcd_mbhc_field {
-	u16 reg;
+	u32 reg;
 	u8 mask;
 };
 

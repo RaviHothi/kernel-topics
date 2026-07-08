@@ -16,6 +16,7 @@ struct wcd_clsh_ctrl {
 	int buck_users;
 	int clsh_users;
 	int codec_version;
+	unsigned int ana_base;
 	struct snd_soc_component *comp;
 };
 
@@ -89,6 +90,12 @@ struct wcd_clsh_ctrl {
 #define WCD9XXX_CLASSH_CTRL_CCL_1_DELTA_IPEAK_30MA	0x30
 
 #define WCD9XXX_BASE_ADDRESS				0x3000
+#define WCD9378_BASE_ADDRESS				0x40180000
+/* Get the correct analog base for the codec version */
+#define WCD_CLSH_ANA_BASE(ctrl) \
+	((ctrl)->codec_version >= WCD9378 ? WCD9378_BASE_ADDRESS : WCD9XXX_BASE_ADDRESS)
+/* Dynamic register address based on codec version */
+#define WCD_CLSH_REG(ctrl, off)				(WCD_CLSH_ANA_BASE(ctrl) + (off))
 #define WCD9XXX_ANA_RX_SUPPLIES				(WCD9XXX_BASE_ADDRESS+0x008)
 #define WCD9XXX_ANA_HPH					(WCD9XXX_BASE_ADDRESS+0x009)
 #define WCD9XXX_CLASSH_MODE_2				(WCD9XXX_BASE_ADDRESS+0x098)
@@ -145,16 +152,16 @@ static inline void wcd_clsh_set_buck_mode(struct snd_soc_component *comp,
 }
 
 static void wcd_clsh_v3_set_buck_mode(struct snd_soc_component *component,
-					  int mode)
+					  struct wcd_clsh_ctrl *ctrl, int mode)
 {
 	if (mode == CLS_H_HIFI || mode == CLS_H_LOHIFI ||
 	    mode == CLS_AB_HIFI || mode == CLS_AB_LOHIFI)
 		snd_soc_component_update_bits(component,
-				WCD9XXX_ANA_RX_SUPPLIES,
+				(ctrl->ana_base + 0x008),
 				0x08, 0x08); /* set to HIFI */
 	else
 		snd_soc_component_update_bits(component,
-				WCD9XXX_ANA_RX_SUPPLIES,
+				(ctrl->ana_base + 0x008),
 				0x08, 0x00); /* set to default */
 }
 
@@ -200,7 +207,7 @@ static void wcd_clsh_v3_buck_ctrl(struct snd_soc_component *component,
 	if ((enable && (++ctrl->buck_users == 1)) ||
 	   (!enable && (--ctrl->buck_users == 0))) {
 		snd_soc_component_update_bits(component,
-				WCD9XXX_ANA_RX_SUPPLIES,
+				(ctrl->ana_base + 0x008),
 				(1 << 7), (enable << 7));
 		/*
 		 * 500us sleep is required after buck enable/disable
@@ -210,11 +217,11 @@ static void wcd_clsh_v3_buck_ctrl(struct snd_soc_component *component,
 		if (mode == CLS_H_LOHIFI || mode == CLS_H_ULP ||
 			mode == CLS_H_HIFI || mode == CLS_H_LP)
 			snd_soc_component_update_bits(component,
-					WCD9XXX_CLASSH_MODE_3,
+					(ctrl->ana_base + 0x099),
 					0x02, 0x00);
 
 		snd_soc_component_update_bits(component,
-					WCD9XXX_CLASSH_MODE_2,
+					(ctrl->ana_base + 0x098),
 					0xFF, 0x3A);
 		/* 500usec delay is needed as per HW requirement */
 		usleep_range(500, 500 + WCD_USLEEP_RANGE);
@@ -315,7 +322,7 @@ static void wcd_clsh_v2_set_hph_mode(struct snd_soc_component *comp, int mode)
 }
 
 static void wcd_clsh_v3_set_hph_mode(struct snd_soc_component *component,
-				  int mode)
+				  struct wcd_clsh_ctrl *ctrl, int mode)
 {
 	u8 val;
 
@@ -342,7 +349,7 @@ static void wcd_clsh_v3_set_hph_mode(struct snd_soc_component *component,
 		return;
 	}
 
-	snd_soc_component_update_bits(component, WCD9XXX_ANA_HPH, 0x0C, val);
+	snd_soc_component_update_bits(component, (ctrl->ana_base + 0x009), 0x0C, val);
 }
 
 void wcd_clsh_set_hph_mode(struct wcd_clsh_ctrl *ctrl, int mode)
@@ -350,7 +357,7 @@ void wcd_clsh_set_hph_mode(struct wcd_clsh_ctrl *ctrl, int mode)
 	struct snd_soc_component *comp = ctrl->comp;
 
 	if (ctrl->codec_version >= WCD937X)
-		wcd_clsh_v3_set_hph_mode(comp, mode);
+		wcd_clsh_v3_set_hph_mode(comp, ctrl, mode);
 	else
 		wcd_clsh_v2_set_hph_mode(comp, mode);
 
@@ -383,68 +390,69 @@ static void wcd_clsh_set_buck_regulator_mode(struct snd_soc_component *comp,
 }
 
 static void wcd_clsh_v3_set_buck_regulator_mode(struct snd_soc_component *component,
-						int mode)
+						struct wcd_clsh_ctrl *ctrl, int mode)
 {
-	snd_soc_component_update_bits(component, WCD9XXX_ANA_RX_SUPPLIES,
+	snd_soc_component_update_bits(component, (ctrl->ana_base + 0x008),
 			    0x02, 0x00);
 }
 
 static void wcd_clsh_v3_set_flyback_mode(struct snd_soc_component *component,
-						int mode)
+						struct wcd_clsh_ctrl *ctrl, int mode)
 {
 	if (mode == CLS_H_HIFI || mode == CLS_H_LOHIFI ||
 	    mode == CLS_AB_HIFI || mode == CLS_AB_LOHIFI) {
 		snd_soc_component_update_bits(component,
-				WCD9XXX_ANA_RX_SUPPLIES,
+				(ctrl->ana_base + 0x008),
 				0x04, 0x04);
 		snd_soc_component_update_bits(component,
-				WCD9XXX_FLYBACK_VNEG_CTRL_4,
+				(ctrl->ana_base + 0x0A8),
 				0xF0, 0x80);
 	} else {
 		snd_soc_component_update_bits(component,
-				WCD9XXX_ANA_RX_SUPPLIES,
+				(ctrl->ana_base + 0x008),
 				0x04, 0x00); /* set to Default */
 		snd_soc_component_update_bits(component,
-				WCD9XXX_FLYBACK_VNEG_CTRL_4,
+				(ctrl->ana_base + 0x0A8),
 				0xF0, 0x70);
 	}
 }
 
 static void wcd_clsh_v3_force_iq_ctl(struct snd_soc_component *component,
+					 struct wcd_clsh_ctrl *ctrl,
 					 int mode, bool enable)
 {
 	if (enable) {
 		snd_soc_component_update_bits(component,
-				WCD9XXX_FLYBACK_VNEGDAC_CTRL_2,
+				(ctrl->ana_base + 0x0AF),
 				0xE0, 0xA0);
 		/* 100usec delay is needed as per HW requirement */
 		usleep_range(100, 110);
 		snd_soc_component_update_bits(component,
-				WCD9XXX_CLASSH_MODE_3,
+				(ctrl->ana_base + 0x099),
 				0x02, 0x02);
 		snd_soc_component_update_bits(component,
-				WCD9XXX_CLASSH_MODE_2,
+				(ctrl->ana_base + 0x098),
 				0xFF, 0x1C);
 		if (mode == CLS_H_LOHIFI || mode == CLS_AB_LOHIFI) {
 			snd_soc_component_update_bits(component,
-					WCD9XXX_HPH_NEW_INT_PA_MISC2,
+					(ctrl->ana_base + 0x138),
 					0x20, 0x20);
 			snd_soc_component_update_bits(component,
-					WCD9XXX_RX_BIAS_HPH_LOWPOWER,
+					(ctrl->ana_base + 0x0BF),
 					0xF0, 0xC0);
 			snd_soc_component_update_bits(component,
-					WCD9XXX_HPH_PA_CTL1,
+					(ctrl->ana_base + 0x0D1),
 					0x0E, 0x02);
 		}
 	} else {
 		snd_soc_component_update_bits(component,
-				WCD9XXX_HPH_NEW_INT_PA_MISC2,
+				(ctrl->ana_base + 0x138),
 				0x20, 0x00);
 		snd_soc_component_update_bits(component,
-				WCD9XXX_RX_BIAS_HPH_LOWPOWER,
+				(ctrl->ana_base + 0x0BF),
 				0xF0, 0x80);
 		snd_soc_component_update_bits(component,
-				WCD9XXX_HPH_PA_CTL1,
+				(ctrl->ana_base + 0x0D1),
 				0x0E, 0x06);
 	}
 }
@@ -458,10 +466,10 @@ static void wcd_clsh_v3_flyback_ctrl(struct snd_soc_component *component,
 	if ((enable && (++ctrl->flyback_users == 1)) ||
 	   (!enable && (--ctrl->flyback_users == 0))) {
 		snd_soc_component_update_bits(component,
-				WCD9XXX_FLYBACK_VNEG_CTRL_1,
+				(ctrl->ana_base + 0x0A5),
 				0xE0, 0xE0);
 		snd_soc_component_update_bits(component,
-				WCD9XXX_ANA_RX_SUPPLIES,
+				(ctrl->ana_base + 0x008),
 				(1 << 6), (enable << 6));
 		/*
 		 * 100us sleep is required after flyback enable/disable
@@ -469,7 +477,7 @@ static void wcd_clsh_v3_flyback_ctrl(struct snd_soc_component *component,
 		 */
 		usleep_range(100, 110);
 		snd_soc_component_update_bits(component,
-				WCD9XXX_FLYBACK_VNEGDAC_CTRL_2,
+				(ctrl->ana_base + 0x0AF),
 				0xE0, 0xE0);
 		/* 500usec delay is needed as per HW requirement */
 		usleep_range(500, 500 + WCD_USLEEP_RANGE);
@@ -477,11 +485,11 @@ static void wcd_clsh_v3_flyback_ctrl(struct snd_soc_component *component,
 }
 
 static void wcd_clsh_v3_set_flyback_current(struct snd_soc_component *component,
-				int mode)
+				struct wcd_clsh_ctrl *ctrl, int mode)
 {
-	snd_soc_component_update_bits(component, WCD9XXX_V3_RX_BIAS_FLYB_BUFF,
+	snd_soc_component_update_bits(component, (ctrl->ana_base + 0x0C7),
 				0x0F, 0x0A);
-	snd_soc_component_update_bits(component, WCD9XXX_V3_RX_BIAS_FLYB_BUFF,
+	snd_soc_component_update_bits(component, (ctrl->ana_base + 0x0C7),
 				0xF0, 0xA0);
 	/* Sleep needed to avoid click and pop as per HW requirement */
 	usleep_range(100, 110);
@@ -493,16 +501,16 @@ static void wcd_clsh_v3_state_aux(struct wcd_clsh_ctrl *ctrl, int req_state,
 	struct snd_soc_component *component = ctrl->comp;
 
 	if (is_enable) {
-		wcd_clsh_v3_set_buck_mode(component, mode);
-		wcd_clsh_v3_set_flyback_mode(component, mode);
+		wcd_clsh_v3_set_buck_mode(component, ctrl, mode);
+		wcd_clsh_v3_set_flyback_mode(component, ctrl, mode);
 		wcd_clsh_v3_flyback_ctrl(component, ctrl, mode, true);
-		wcd_clsh_v3_set_flyback_current(component, mode);
+		wcd_clsh_v3_set_flyback_current(component, ctrl, mode);
 		wcd_clsh_v3_buck_ctrl(component, ctrl, mode, true);
 	} else {
 		wcd_clsh_v3_buck_ctrl(component, ctrl, mode, false);
 		wcd_clsh_v3_flyback_ctrl(component, ctrl, mode, false);
-		wcd_clsh_v3_set_flyback_mode(component, CLS_H_NORMAL);
-		wcd_clsh_v3_set_buck_mode(component, CLS_H_NORMAL);
+		wcd_clsh_v3_set_flyback_mode(component, ctrl, CLS_H_NORMAL);
+		wcd_clsh_v3_set_buck_mode(component, ctrl, CLS_H_NORMAL);
 	}
 }
 
@@ -545,23 +553,23 @@ static void wcd_clsh_v3_state_hph_r(struct wcd_clsh_ctrl *ctrl, int req_state,
 	}
 
 	if (is_enable) {
-		wcd_clsh_v3_set_buck_regulator_mode(component, mode);
-		wcd_clsh_v3_set_flyback_mode(component, mode);
-		wcd_clsh_v3_force_iq_ctl(component, mode, true);
+		wcd_clsh_v3_set_buck_regulator_mode(component, ctrl, mode);
+		wcd_clsh_v3_set_flyback_mode(component, ctrl, mode);
+		wcd_clsh_v3_force_iq_ctl(component, ctrl, mode, true);
 		wcd_clsh_v3_flyback_ctrl(component, ctrl, mode, true);
-		wcd_clsh_v3_set_flyback_current(component, mode);
-		wcd_clsh_v3_set_buck_mode(component, mode);
+		wcd_clsh_v3_set_flyback_current(component, ctrl, mode);
+		wcd_clsh_v3_set_buck_mode(component, ctrl, mode);
 		wcd_clsh_v3_buck_ctrl(component, ctrl, mode, true);
-		wcd_clsh_v3_set_hph_mode(component, mode);
+		wcd_clsh_v3_set_hph_mode(component, ctrl, mode);
 	} else {
-		wcd_clsh_v3_set_hph_mode(component, CLS_H_NORMAL);
+		wcd_clsh_v3_set_hph_mode(component, ctrl, CLS_H_NORMAL);
 
 		/* buck and flyback set to default mode and disable */
 		wcd_clsh_v3_flyback_ctrl(component, ctrl, CLS_H_NORMAL, false);
 		wcd_clsh_v3_buck_ctrl(component, ctrl, CLS_H_NORMAL, false);
-		wcd_clsh_v3_force_iq_ctl(component, CLS_H_NORMAL, false);
-		wcd_clsh_v3_set_flyback_mode(component, CLS_H_NORMAL);
-		wcd_clsh_v3_set_buck_mode(component, CLS_H_NORMAL);
+		wcd_clsh_v3_force_iq_ctl(component, ctrl, CLS_H_NORMAL, false);
+		wcd_clsh_v3_set_flyback_mode(component, ctrl, CLS_H_NORMAL);
+		wcd_clsh_v3_set_buck_mode(component, ctrl, CLS_H_NORMAL);
 	}
 }
 
@@ -635,23 +643,23 @@ static void wcd_clsh_v3_state_hph_l(struct wcd_clsh_ctrl *ctrl, int req_state,
 	}
 
 	if (is_enable) {
-		wcd_clsh_v3_set_buck_regulator_mode(component, mode);
-		wcd_clsh_v3_set_flyback_mode(component, mode);
-		wcd_clsh_v3_force_iq_ctl(component, mode, true);
+		wcd_clsh_v3_set_buck_regulator_mode(component, ctrl, mode);
+		wcd_clsh_v3_set_flyback_mode(component, ctrl, mode);
+		wcd_clsh_v3_force_iq_ctl(component, ctrl, mode, true);
 		wcd_clsh_v3_flyback_ctrl(component, ctrl, mode, true);
-		wcd_clsh_v3_set_flyback_current(component, mode);
-		wcd_clsh_v3_set_buck_mode(component, mode);
+		wcd_clsh_v3_set_flyback_current(component, ctrl, mode);
+		wcd_clsh_v3_set_buck_mode(component, ctrl, mode);
 		wcd_clsh_v3_buck_ctrl(component, ctrl, mode, true);
-		wcd_clsh_v3_set_hph_mode(component, mode);
+		wcd_clsh_v3_set_hph_mode(component, ctrl, mode);
 	} else {
-		wcd_clsh_v3_set_hph_mode(component, CLS_H_NORMAL);
+		wcd_clsh_v3_set_hph_mode(component, ctrl, CLS_H_NORMAL);
 
 		/* set buck and flyback to Default Mode */
 		wcd_clsh_v3_flyback_ctrl(component, ctrl, CLS_H_NORMAL, false);
 		wcd_clsh_v3_buck_ctrl(component, ctrl, CLS_H_NORMAL, false);
-		wcd_clsh_v3_force_iq_ctl(component, CLS_H_NORMAL, false);
-		wcd_clsh_v3_set_flyback_mode(component, CLS_H_NORMAL);
-		wcd_clsh_v3_set_buck_mode(component, CLS_H_NORMAL);
+		wcd_clsh_v3_force_iq_ctl(component, ctrl, CLS_H_NORMAL, false);
+		wcd_clsh_v3_set_flyback_mode(component, ctrl, CLS_H_NORMAL);
+		wcd_clsh_v3_set_buck_mode(component, ctrl, CLS_H_NORMAL);
 	}
 }
 
@@ -719,23 +727,23 @@ static void wcd_clsh_v3_state_ear(struct wcd_clsh_ctrl *ctrl, int req_state,
 	struct snd_soc_component *component = ctrl->comp;
 
 	if (is_enable) {
-		wcd_clsh_v3_set_buck_regulator_mode(component, mode);
-		wcd_clsh_v3_set_flyback_mode(component, mode);
-		wcd_clsh_v3_force_iq_ctl(component, mode, true);
+		wcd_clsh_v3_set_buck_regulator_mode(component, ctrl, mode);
+		wcd_clsh_v3_set_flyback_mode(component, ctrl, mode);
+		wcd_clsh_v3_force_iq_ctl(component, ctrl, mode, true);
 		wcd_clsh_v3_flyback_ctrl(component, ctrl, mode, true);
-		wcd_clsh_v3_set_flyback_current(component, mode);
-		wcd_clsh_v3_set_buck_mode(component, mode);
+		wcd_clsh_v3_set_flyback_current(component, ctrl, mode);
+		wcd_clsh_v3_set_buck_mode(component, ctrl, mode);
 		wcd_clsh_v3_buck_ctrl(component, ctrl, mode, true);
-		wcd_clsh_v3_set_hph_mode(component, mode);
+		wcd_clsh_v3_set_hph_mode(component, ctrl, mode);
 	} else {
-		wcd_clsh_v3_set_hph_mode(component, CLS_H_NORMAL);
+		wcd_clsh_v3_set_hph_mode(component, ctrl, CLS_H_NORMAL);
 
 		/* set buck and flyback to Default Mode */
 		wcd_clsh_v3_flyback_ctrl(component, ctrl, CLS_H_NORMAL, false);
 		wcd_clsh_v3_buck_ctrl(component, ctrl, CLS_H_NORMAL, false);
-		wcd_clsh_v3_force_iq_ctl(component, CLS_H_NORMAL, false);
-		wcd_clsh_v3_set_flyback_mode(component, CLS_H_NORMAL);
-		wcd_clsh_v3_set_buck_mode(component, CLS_H_NORMAL);
+		wcd_clsh_v3_force_iq_ctl(component, ctrl, CLS_H_NORMAL, false);
+		wcd_clsh_v3_set_flyback_mode(component, ctrl, CLS_H_NORMAL);
+		wcd_clsh_v3_set_buck_mode(component, ctrl, CLS_H_NORMAL);
 	}
 }
 
@@ -887,6 +895,8 @@ struct wcd_clsh_ctrl *wcd_clsh_ctrl_alloc(struct snd_soc_component *comp,
 	ctrl->state = WCD_CLSH_STATE_IDLE;
 	ctrl->comp = comp;
 	ctrl->codec_version = version;
+	ctrl->ana_base = (version >= WCD9378) ? WCD9378_BASE_ADDRESS :
+					    WCD9XXX_BASE_ADDRESS;
 
 	return ctrl;
 }

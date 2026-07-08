@@ -190,15 +190,41 @@ static int wcd9378_interrupt_callback(struct sdw_slave *slave,
  * SDCA interrupt status/mask/type registers are handled separately.
  */
 static const struct reg_default wcd9378_defaults[] = {
-	{ SWRS_SCP_SDCA_INTMASK_1,			0x00 },
+	/*
+	 * SDCA_INTMASK_1: mask all MBHC interrupts (0xff) while MBHC is
+	 * disabled. Without this, MBHC events fire sub-IRQs with no handler,
+	 * causing 'irq: nobody cared' warnings. Change to 0x00 when MBHC
+	 * is re-enabled.
+	 */
+	{ SWRS_SCP_SDCA_INTMASK_1,			0xff },
 	{ SWRS_SCP_SDCA_INTMASK_2,			0x00 },
-	{ SWRS_SCP_SDCA_INTMASK_3,			0x00 },
+	/*
+	 * Mask HPHL/R surge detection interrupts (bits 2,3) in SDCA_INTMASK_3.
+	 * These fire immediately when HPH surge protection is enabled with no
+	 * HPH load connected, setting SDCA_CASCADE in SDW_DP0_INT and causing
+	 * a continuous SLAVE_PEND_IRQ ALERT loop. Masking prevents them from
+	 * contributing to SDCA_CASCADE. Unmask when MBHC is re-enabled and
+	 * the surge detection flow is properly handled.
+	 */
+	{ SWRS_SCP_SDCA_INTMASK_3,			0x0c },
 	{ SWRS_SCP_SDCA_INTRTYPE_1,			0x00 },
 	{ SWRS_SCP_SDCA_INTRTYPE_2,			0x00 },
 	{ SWRS_SCP_SDCA_INTRTYPE_3,			0x00 },
 	{ WCD9378_ANA_BIAS,				0x00 },
 	{ WCD9378_ANA_RX_SUPPLIES,			0x00 },
 	{ WCD9378_ANA_HPH,				0x0c },
+	/* Class-H control registers (not already present above) */
+	{ WCD9378_CLASSH_MODE_1,			0x00 },
+	{ WCD9378_CLASSH_MODE_2,			0x00 },
+	{ WCD9378_CLASSH_MODE_3,			0x00 },
+	{ WCD9378_CLASSH_CTRL_VCL_2,			0x00 },
+	{ WCD9378_CLASSH_CTRL_CCL_1,			0x00 },
+	{ WCD9378_FLYBACK_VNEG_CTRL_1,			0x00 },
+	{ WCD9378_FLYBACK_VNEG_CTRL_4,			0x00 },
+	{ WCD9378_FLYBACK_VNEGDAC_CTRL_2,		0x00 },
+	{ WCD9378_V3_RX_BIAS_FLYB_BUFF,			0x00 },
+	{ WCD9378_PDM_WD_CTL0,				0x00 },
+	{ WCD9378_PDM_WD_CTL1,				0x00 },
 	{ WCD9378_ANA_EAR,				0x00 },
 	{ WCD9378_ANA_EAR_COMPANDER_CTL,		0x02 },
 	{ WCD9378_ANA_TX_CH1,				0x20 },
@@ -302,6 +328,29 @@ static const struct reg_default wcd9378_defaults[] = {
 	{ WCD9378_HPH_R_DAC_CTL,			0x20 },
 	{ WCD9378_HPH_SURGE_HPHLR_SURGE_COMP_SEL,	0x55 },
 	{ WCD9378_HPH_SURGE_HPHLR_SURGE_EN,		0x19 },
+	{ WCD9378_CDC_ANA_TX_CLK_CTL,			0x00 },
+	{ WCD9378_SWR_TX_CLK_RATE,			0x00 },
+	{ WCD9378_CDC_HPH_GAIN_CTL,			0x00 },
+	{ WCD9378_CDC_RST_CTL,				0x03 },
+	{ WCD9378_SWR_RST_EN,				0x00 },
+	{ WCD9378_PLATFORM_CTL,				0x01 },
+	{ WCD9378_SYS_USAGE_CTRL,			0x00 },
+	{ WCD9378_BYP_EN_CTL0,				0x00 },
+	{ WCD9378_BYP_EN_CTL1,				0x00 },
+	{ WCD9378_BYP_EN_CTL2,				0x10 },
+	{ WCD9378_SEQ_OVRRIDE_CTL0,			0x01 },
+	{ WCD9378_SEQ_OVRRIDE_CTL1,			0x00 },
+	{ WCD9378_SEQ_OVRRIDE_CTL2,			0x04 },
+	{ WCD9378_HPH_SEQ_OVRRIDE_CTL0,			0x00 },
+	{ WCD9378_HPH_SEQ_OVRRIDE_CTL1,			0x00 },
+	{ WCD9378_HPH_UP_T0,				0x05 },
+	{ WCD9378_HPH_UP_T7,				0x00 },
+	{ WCD9378_HPH_UP_T9,				0x05 },
+	{ WCD9378_HPH_DN_T0,				0x06 },
+	{ WCD9378_HPH_DN_T1,				0x00 },
+	{ WCD9378_SM0_MB_SEL,				0x01 },
+	{ WCD9378_SM1_MB_SEL,				0x02 },
+	{ WCD9378_SM2_MB_SEL,				0x03 },
 	{ WCD9378_HPH_SURGE_HPHLR_SURGE_MISC1,		0xa0 },
 	{ WCD9378_EAR_EAR_EN_REG,			0x22 },
 	{ WCD9378_EAR_EAR_PA_CON,			0x44 },
@@ -355,6 +404,7 @@ static const struct reg_default wcd9378_defaults[] = {
 	{ WCD9378_CP_CP_DTOP_CTRL_0,			0x00 },
 	{ WCD9378_CP_CP_DTOP_CTRL_1,			0x1b },
 	{ WCD9378_CP_CP_DTOP_CTRL_9,			0x63 },
+	{ WCD9378_CP_CP_DTOP_CTRL_14,			0x00 },
 	{ WCD9378_MBHC_NEW_INT_MOISTURE_DET_DC_CTRL,	0x57 },
 	{ WCD9378_MBHC_NEW_INT_MOISTURE_DET_POLLING_CTRL, 0x01 },
 	{ WCD9378_MBHC_NEW_INT_MECH_DET_CURRENT,	0x00 },
@@ -371,7 +421,15 @@ static const struct reg_default wcd9378_defaults[] = {
 	{ WCD9378_AUX_INT_TEST_CTRL,			0x00 },
 	{ WCD9378_AUX_INT_MISC,				0x00 },
 	/* SDCA function registers */
+	/* WCD9378_SMP_AMP_FUNC_STAT is RW1C — not in defaults to avoid
+	 * regcache_sync writing 0x67 which would incorrectly SET status bits.
+	 * wcd9378_class_load() clears it explicitly by writing 0xFF. */
+	{ WCD9378_FUNC_ACT,				0x00 },
 	{ WCD9378_XU22_BYP,				0x01 },
+	{ WCD9378_CMT_GRP_MASK_REG,			0x00 },
+	/* WCD9378_SMP_JACK_FUNC_STAT is RW1C — not in defaults (same reason
+	 * as SMP_AMP_FUNC_STAT above). Cleared by wcd9378_class_load(). */
+	{ WCD9378_SMP_JACK_FUNC_ACT,			0x00 },
 	{ WCD9378_PDE22_REQ_PS,				0x03 },
 	{ WCD9378_FU23_MUTE,				0x01 },
 	{ WCD9378_PDE23_REQ_PS,				0x03 },
@@ -416,6 +474,18 @@ static bool wcd9378_rdwr_register(struct device *dev, unsigned int reg)
 	case WCD9378_ANA_BIAS:
 	case WCD9378_ANA_RX_SUPPLIES:
 	case WCD9378_ANA_HPH:
+	/* Class-H control registers (not already present above) */
+	case WCD9378_CLASSH_MODE_1:
+	case WCD9378_CLASSH_MODE_2:
+	case WCD9378_CLASSH_MODE_3:
+	case WCD9378_CLASSH_CTRL_VCL_2:
+	case WCD9378_CLASSH_CTRL_CCL_1:
+	case WCD9378_FLYBACK_VNEG_CTRL_1:
+	case WCD9378_FLYBACK_VNEG_CTRL_4:
+	case WCD9378_FLYBACK_VNEGDAC_CTRL_2:
+	case WCD9378_V3_RX_BIAS_FLYB_BUFF:
+	case WCD9378_PDM_WD_CTL0:
+	case WCD9378_PDM_WD_CTL1:
 	case WCD9378_ANA_EAR:
 	case WCD9378_ANA_EAR_COMPANDER_CTL:
 	case WCD9378_ANA_TX_CH1:
@@ -504,6 +574,21 @@ static bool wcd9378_rdwr_register(struct device *dev, unsigned int reg)
 	case WCD9378_HPH_R_DAC_CTL:
 	case WCD9378_HPH_SURGE_HPHLR_SURGE_COMP_SEL:
 	case WCD9378_HPH_SURGE_HPHLR_SURGE_EN:
+	case WCD9378_CDC_ANA_TX_CLK_CTL:
+	case WCD9378_CDC_RST_CTL:
+	case WCD9378_SWR_RST_EN:
+	case WCD9378_SWR_TX_CLK_RATE:
+	case WCD9378_CDC_HPH_GAIN_CTL:
+	case WCD9378_PLATFORM_CTL:
+	case WCD9378_SYS_USAGE_CTRL:
+	case WCD9378_HPH_UP_T0:
+	case WCD9378_HPH_UP_T7:
+	case WCD9378_HPH_UP_T9:
+	case WCD9378_HPH_DN_T0:
+	case WCD9378_HPH_DN_T1:
+	case WCD9378_SM0_MB_SEL:
+	case WCD9378_SM1_MB_SEL:
+	case WCD9378_SM2_MB_SEL:
 	case WCD9378_HPH_SURGE_HPHLR_SURGE_MISC1:
 	case WCD9378_EAR_EAR_EN_REG:
 	case WCD9378_EAR_EAR_PA_CON:
@@ -547,6 +632,7 @@ static bool wcd9378_rdwr_register(struct device *dev, unsigned int reg)
 	case WCD9378_CP_CP_DTOP_CTRL_0:
 	case WCD9378_CP_CP_DTOP_CTRL_1:
 	case WCD9378_CP_CP_DTOP_CTRL_9:
+	case WCD9378_CP_CP_DTOP_CTRL_14:
 	case WCD9378_MBHC_NEW_INT_MOISTURE_DET_DC_CTRL:
 	case WCD9378_MBHC_NEW_INT_MOISTURE_DET_POLLING_CTRL:
 	case WCD9378_MBHC_NEW_INT_MECH_DET_CURRENT:
@@ -562,8 +648,35 @@ static bool wcd9378_rdwr_register(struct device *dev, unsigned int reg)
 	case WCD9378_AUX_INT_CLK_CTRL:
 	case WCD9378_AUX_INT_TEST_CTRL:
 	case WCD9378_AUX_INT_MISC:
+	/* SDCA interrupt mask and type registers */
+	case SWRS_SCP_SDCA_INTMASK_1:
+	case SWRS_SCP_SDCA_INTMASK_2:
+	case SWRS_SCP_SDCA_INTMASK_3:
+	/* SDCA interrupt status registers (RW1C — write 1 to clear) */
+	case SWRS_SCP_SDCA_INTSTAT_1:
+	case SWRS_SCP_SDCA_INTSTAT_2:
+	case SWRS_SCP_SDCA_INTSTAT_3:
+	case SWRS_SCP_SDCA_INTRTYPE_1:
+	case SWRS_SCP_SDCA_INTRTYPE_2:
+	case SWRS_SCP_SDCA_INTRTYPE_3:
 	/* SDCA function registers */
+	case WCD9378_SMP_AMP_FUNC_STAT:
+	case WCD9378_FUNC_ACT:
 	case WCD9378_XU22_BYP:
+	case WCD9378_CMT_GRP_MASK_REG:
+	case WCD9378_SMP_JACK_FUNC_STAT:
+	case WCD9378_SMP_JACK_FUNC_ACT:
+	case WCD9378_SEQ_HPH_STAT:
+	case WCD9378_SEQ_SA_STAT:
+	case WCD9378_SEQ_TX1_STAT:
+	case WCD9378_BYP_EN_CTL0:
+	case WCD9378_BYP_EN_CTL1:
+	case WCD9378_BYP_EN_CTL2:
+	case WCD9378_SEQ_OVRRIDE_CTL0:
+	case WCD9378_SEQ_OVRRIDE_CTL1:
+	case WCD9378_SEQ_OVRRIDE_CTL2:
+	case WCD9378_HPH_SEQ_OVRRIDE_CTL0:
+	case WCD9378_HPH_SEQ_OVRRIDE_CTL1:
 	case WCD9378_PDE22_REQ_PS:
 	case WCD9378_FU23_MUTE:
 	case WCD9378_PDE23_REQ_PS:
@@ -637,8 +750,13 @@ static bool wcd9378_readable_register(struct device *dev, unsigned int reg)
 	case WCD9378_SAPU29_PROT_MODE:
 	case WCD9378_SAPU29_PROT_STAT:
 	case WCD9378_PDE23_ACT_PS:
+	case WCD9378_SMP_AMP_FUNC_STAT:
+	case WCD9378_FUNC_ACT:
 	case WCD9378_SMP_JACK_FUNC_STAT:
 	case WCD9378_SMP_JACK_FUNC_ACT:
+	case WCD9378_SEQ_HPH_STAT:
+	case WCD9378_SEQ_SA_STAT:
+	case WCD9378_SEQ_TX1_STAT:
 	case WCD9378_PDE42_ACT_PS:
 	case WCD9378_PDE47_ACT_PS:
 	case WCD9378_PDE34_ACT_PS:
@@ -683,6 +801,13 @@ static bool wcd9378_volatile_register(struct device *dev, unsigned int reg)
 	case WCD9378_PDE22_ACT_PS:
 	case WCD9378_SAPU29_PROT_STAT:
 	case WCD9378_PDE23_ACT_PS:
+	case WCD9378_SMP_AMP_FUNC_STAT:
+	case WCD9378_FUNC_ACT:
+	case WCD9378_SMP_JACK_FUNC_STAT:
+	case WCD9378_SMP_JACK_FUNC_ACT:
+	case WCD9378_SEQ_HPH_STAT:
+	case WCD9378_SEQ_SA_STAT:
+	case WCD9378_SEQ_TX1_STAT:
 	case WCD9378_PDE42_ACT_PS:
 	case WCD9378_PDE47_ACT_PS:
 	case WCD9378_PDE34_ACT_PS:
@@ -708,12 +833,55 @@ static const struct regmap_config wcd9378_regmap_config = {
 	.volatile_reg = wcd9378_volatile_register,
 	.reg_format_endian = REGMAP_ENDIAN_NATIVE,
 	.val_format_endian = REGMAP_ENDIAN_NATIVE,
-	.can_multi_write = true,
 	.use_single_read = true,
 };
 
+#define SWRS_SCP_HOST_CLK_DIV2_CTL_BANK(m)	(0xE0 + 0x10 * (m))
+
+/*
+ * wcd9378_bus_config - Update SWR_TX_CLK_RATE register when bus clock changes.
+ *
+ * The hardware valid-config detection circuit reads WCD9378_SWR_TX_CLK_RATE to
+ * determine if the current SWR clock rate is valid for the HPH/SA sequencers.
+ * Without this register being set correctly, the sequencer fires HPH_FUNC_FAULTY
+ * and refuses to power up the HPH path.
+ *
+ * Encoding: 0=9.6MHz, 1=4.8MHz, 3=2.4MHz (per nibble, bank0=low, bank1=high)
+ */
+static int wcd9378_bus_config(struct sdw_slave *slave,
+			      struct sdw_bus_params *params)
+{
+	struct regmap *regmap = dev_get_regmap(&slave->dev, NULL);
+	u8 clk_val;
+
+	/* Write bank-select for host clock divider (standard upstream behavior) */
+	sdw_write(slave, SWRS_SCP_HOST_CLK_DIV2_CTL_BANK(params->next_bank), 0x01);
+
+	if (!regmap)
+		return 0;
+
+	/* Encode clock rate: 0=9.6MHz, 1=4.8MHz, 3=2.4MHz */
+	switch (params->curr_dr_freq / 2) {
+	case 4800000:
+		clk_val = 0x11; /* bank0=4.8MHz, bank1=4.8MHz */
+		break;
+	case 2400000:
+		clk_val = 0x33; /* bank0=2.4MHz, bank1=2.4MHz */
+		break;
+	case 9600000:
+	default:
+		clk_val = 0x00; /* bank0=9.6MHz, bank1=9.6MHz */
+		break;
+	}
+
+	regmap_write(regmap, WCD9378_SWR_TX_CLK_RATE, clk_val);
+
+	return 0;
+}
+
 static const struct sdw_slave_ops wcd9378_slave_ops = {
 	.update_status = wcd_update_status,
+	.bus_config = wcd9378_bus_config,
 	.interrupt_callback = wcd9378_interrupt_callback,
 };
 
@@ -722,6 +890,7 @@ static int wcd9378_sdw_probe(struct sdw_slave *pdev,
 {
 	struct device *dev = &pdev->dev;
 	struct wcd9378_sdw_priv *wcd;
+
 	u8 master_ch_mask[WCD9378_MAX_SWR_CH_IDS];
 	int master_ch_mask_size = 0;
 	int ret, i;
@@ -758,6 +927,7 @@ static int wcd9378_sdw_probe(struct sdw_slave *pdev,
 				   SDW_SCP_INT1_PARITY;
 	pdev->prop.lane_control_support = true;
 	pdev->prop.simple_clk_stop_capable = true;
+	pdev->prop.paging_support = true;
 
 	memset(master_ch_mask, 0, sizeof(master_ch_mask));
 
@@ -828,7 +998,7 @@ static void wcd9378_sdw_remove(struct sdw_slave *pdev)
 }
 
 static const struct sdw_device_id wcd9378_slave_id[] = {
-	SDW_SLAVE_ENTRY(0x0217, 0x10a, 0), /* WCD9378 RX/TX Device ID */
+	SDW_SLAVE_ENTRY(0x0217, 0x110, 0), /* WCD9378 RX/TX Device ID */
 	{ },
 };
 MODULE_DEVICE_TABLE(sdw, wcd9378_slave_id);
